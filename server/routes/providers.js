@@ -250,7 +250,15 @@ export default async function providersRoute(app, { engine }) {
           models: provEntry.builtinModels.map(id => ({ id, name: id, context: null, maxOutput: null })),
         };
       }
-      return { error: "No built-in models found for this provider", models: [] };
+      // 自定义 provider：从 providers.yaml 的 models 字段返回
+      const savedProvider = name ? (getAllProviders(engine.configPath)[name] || {}) : {};
+      if (savedProvider.models?.length > 0) {
+        return {
+          source: "config",
+          models: savedProvider.models.map(id => ({ id, name: id, context: null, maxOutput: null })),
+        };
+      }
+      return { error: "No built-in models found for this provider. Please add models to your provider config in providers.yaml", models: [] };
     }
 
     try {

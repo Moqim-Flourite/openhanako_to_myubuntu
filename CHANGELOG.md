@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.58.1-linux.4] - 2026-03-23
+
+### Fixed
+- **自定义 provider 模型列表问题**: 修复自定义 provider (anthropic-messages API) 无法获取模型列表的问题
+- 现在会从 `providers.yaml` 的 `models` 字段读取模型列表
+
+---
+
 ## [0.58.1-linux.3] - 2026-03-22
 
 ### Fixed
