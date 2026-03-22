@@ -1,6 +1,6 @@
 {
   "name": "hanako-linux",
-  "version": "0.58.1-linux.2",
+  "version": "0.58.1-linux.3",
   "type": "module",
   "description": "Hanako - a personal AI agent with memory and soul (Linux/Ubuntu optimized)",
   "license": "Apache-2.0",
@@ -174,21 +174,7 @@
       "category": "Utility",
       "icon": "desktop/src/icon.png",
       "maintainer": "Moqim-Flourite <104286151+Moqim-Flourite@users.noreply.github.com>",
-      "artifactName": "${productName}-${version}-Linux-${arch}.${ext}",
-      "desktop": {
-        "Name": "Hanako",
-        "Comment": "Personal AI Assistant with Memory and Soul",
-        "Categories": "Utility;AI;Office;",
-        "StartupWMClass": "hanako",
-        "Keywords": "ai;assistant;chatbot;agent;"
-      },
-      "appImage": {
-        "systemIntegration": "ask"
-      },
-      "deb": {
-        "priority": "optional",
-        "compression": "xz"
-      }
+      "artifactName": "${productName}-${version}-Linux-${arch}.${ext}"
     },
     "publish": [
       {

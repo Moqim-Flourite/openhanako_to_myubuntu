@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.58.1-linux.3] - 2026-03-22
+
+### Fixed
+- **Linux 打包配置简化**: 移除冗余的 desktop/appImage/deb 配置项，修复打包失败问题
+
+---
+
 ## [0.58.1-linux.2] - 2026-03-22
 
 ### Added
