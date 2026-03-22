@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.58.1-linux.2] - 2026-03-22
+
+### Added
+- **调试日志增强**: 为 Linux 沙盒相关模块添加详细的持久化日志
+  - `platform.js`: 平台检测和工具可用性检查日志
+  - `bwrap.js`: bubblewrap 执行生命周期和参数构建日志
+  - `exec-helper.js`: 进程 spawn/kill 操作和状态日志
+  - `index.js`: 沙盒工具创建和平台选择日志
+  - `policy.js`: 策略推导和路径计数日志
+  - `path-guard.js`: 访问权限检查结果日志
+
+### Technical Details
+- 所有日志使用 `createModuleLogger()` 写入 `~/.hanako/logs/` 目录
+- 日志格式: `[HH:MM:SS.mmm] [LEVEL] [MODULE] message`
+- 支持日志去重和隐私清洗（自动隐藏 token、密钥等敏感信息）
+- 日志文件按启动时间戳命名，自动清理 7 天前的旧日志
+
+---
+
 ## [0.58.1-linux.1] - 2026-03-22
 
 ### Added
