@@ -1,6 +1,20 @@
 # Changelog
-
 All notable changes to this project will be documented in this file.
+
+## [0.58.1-linux.7] - 2026-03-23
+### Added
+- **手动输入模型 ID 功能**: 在 Onboarding 模型选择页面添加手动输入选项
+  - 复选框切换手动输入模式（中英文双语）
+  - 当模型列表为空或找不到模型时，可手动输入模型 ID
+  - 参考 Operit 设计理念：模型名称输入框始终可编辑，不依赖模型列表获取成功与否
+### Fixed
+- 修复自定义 API 提供商（如联通 GLM5，anthropic-messages API）模型列表为空时无法继续配置的问题
+
+## [0.58.1-linux.5] - 2026-03-23
+### Fixed
+- **anthropic-messages API 建议模型列表**: 当自定义 provider 使用 anthropic-messages API 且无法获取模型列表时，返回一组常见的 Anthropic 兼容模型 ID 作为建议
+  - Claude 系列：claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus
+  - GLM 系列：glm-4-plus, glm-4, glm-4-flash
 
 ## [0.58.1-linux.4] - 2026-03-23
 

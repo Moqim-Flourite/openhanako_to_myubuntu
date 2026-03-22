@@ -168,6 +168,9 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
   const [modelLoading, setModelLoading] = useState('');
   const [selectedUtility, setSelectedUtility] = useState('');
   const [selectedUtilityLarge, setSelectedUtilityLarge] = useState('');
+  // 手动输入模型 ID（参考 Operit 设计：始终可编辑，不依赖模型列表获取成功与否）
+  const [manualModelId, setManualModelId] = useState('');
+  const [useManualModel, setUseManualModel] = useState(false);
 
   // ── Step 4: theme ──
   const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('hana-theme') || 'auto');
@@ -387,25 +390,31 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
 
   // ── Save model ──
   const saveModel = useCallback(async () => {
+    // 使用手动输入的模型 ID 或从列表选择的模型
+    const finalModelId = useManualModel ? manualModelId.trim() : selectedModel;
+    if (!finalModelId) return;
+
     // Save chat model
     await hanaFetch(`/api/agents/${AGENT_ID}/config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ models: { chat: selectedModel } }),
+      body: JSON.stringify({ models: { chat: finalModelId } }),
     });
 
-    // Save model list to provider
-    const modelIds = fetchedModels.map(m => m.id);
-    await hanaFetch(`/api/agents/${AGENT_ID}/config`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        providers: { [providerName]: { models: modelIds } },
-      }),
-    });
+    // Save model list to provider (如果有列表才保存)
+    if (fetchedModels.length > 0) {
+      const modelIds = fetchedModels.map(m => m.id);
+      await hanaFetch(`/api/agents/${AGENT_ID}/config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          providers: { [providerName]: { models: modelIds } },
+        }),
+      });
+    }
 
     // Save favorites
-    const favs = [selectedModel];
+    const favs = [finalModelId];
     if (selectedUtility && !favs.includes(selectedUtility)) favs.push(selectedUtility);
     if (selectedUtilityLarge && !favs.includes(selectedUtilityLarge)) favs.push(selectedUtilityLarge);
     await hanaFetch('/api/favorites', {
@@ -425,7 +434,7 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
         body: JSON.stringify({ models: utilityModels }),
       });
     }
-  }, [hanaFetch, selectedModel, fetchedModels, providerName, selectedUtility, selectedUtilityLarge]);
+  }, [hanaFetch, selectedModel, manualModelId, useManualModel, fetchedModels, providerName, selectedUtility, selectedUtilityLarge]);
 
   // ── Filtered models ──
   const filteredModels = modelSearch
@@ -480,7 +489,9 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
 
   const onModelNext = useCallback(async () => {
     if (preview) { goToStep(4); return; }
-    if (!selectedModel) return;
+    // 使用手动输入或列表选择
+    const finalModelId = useManualModel ? manualModelId.trim() : selectedModel;
+    if (!finalModelId) return;
     try {
       await saveModel();
       goToStep(4);
@@ -488,7 +499,7 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
       console.error('[onboarding] save model failed:', err);
       showError(t('onboarding.provider.testFailed'));
     }
-  }, [preview, selectedModel, saveModel, goToStep, showError]);
+  }, [preview, selectedModel, manualModelId, useManualModel, saveModel, goToStep, showError]);
 
   const onFinish = useCallback(async () => {
     if (preview) { window.close(); return; }
@@ -707,13 +718,45 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
               filteredModels.map(model => (
                 <div
                   key={model.id}
-                  className={`model-item${selectedModel === model.id ? ' selected' : ''}`}
-                  onClick={() => setSelectedModel(model.id)}
+                  className={`model-item${selectedModel === model.id && !useManualModel ? ' selected' : ''}`}
+                  onClick={() => { setSelectedModel(model.id); setUseManualModel(false); }}
                 >
                   {model.id}
                 </div>
               ))
             )}
+          </div>
+
+          {/* 手动输入模型 ID - 参考 Operit 设计：始终可编辑，不依赖模型列表获取成功与否 */}
+          <div className="ob-manual-model-section" style={{ marginTop: '16px', padding: '12px', background: 'var(--surface-alt, #f5f5f5)', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+              <input
+                type="checkbox"
+                id="useManualModel"
+                checked={useManualModel}
+                onChange={e => setUseManualModel(e.target.checked)}
+                style={{ marginRight: '8px' }}
+              />
+              <label htmlFor="useManualModel" style={{ fontSize: '0.9rem', cursor: 'pointer' }}>
+                {isZh ? '手动输入模型 ID' : 'Enter model ID manually'}
+              </label>
+            </div>
+            {useManualModel && (
+              <input
+                className="ob-input"
+                type="text"
+                placeholder={isZh ? '输入模型 ID，如 claude-3-opus-20240229' : 'Enter model ID, e.g. claude-3-opus-20240229'}
+                value={manualModelId}
+                onChange={e => setManualModelId(e.target.value)}
+                autoComplete="off"
+                style={{ width: '100%', marginTop: '8px' }}
+              />
+            )}
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)', marginTop: '8px', marginBottom: 0 }}>
+              {isZh 
+                ? '如果模型列表为空或找不到您的模型，可以手动输入模型 ID。'
+                : 'If the model list is empty or you cannot find your model, you can enter the model ID manually.'}
+            </p>
           </div>
 
           {/* Utility model selectors */}
@@ -748,7 +791,7 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
             </button>
             <button
               className="ob-btn ob-btn-primary"
-              disabled={!preview && !selectedModel}
+              disabled={!preview && !selectedModel && !(useManualModel && manualModelId.trim())}
               onClick={onModelNext}
             >
               {t('onboarding.model.next')}
