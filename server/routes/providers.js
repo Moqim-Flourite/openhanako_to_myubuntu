@@ -258,7 +258,20 @@ export default async function providersRoute(app, { engine }) {
           models: savedProvider.models.map(id => ({ id, name: id, context: null, maxOutput: null })),
         };
       }
-      return { error: "No built-in models found for this provider. Please add models to your provider config in providers.yaml", models: [] };
+      // 最后 fallback：返回常见的 Anthropic 兼容模型 ID 作为建议
+      // 用户可以根据自己的 API 提供商修改
+      return {
+        source: "suggested",
+        models: [
+          { id: "claude-3-5-sonnet-20241022", name: "claude-3-5-sonnet-20241022", context: null, maxOutput: null },
+          { id: "claude-3-5-haiku-20241022", name: "claude-3-5-haiku-20241022", context: null, maxOutput: null },
+          { id: "claude-3-opus-20240229", name: "claude-3-opus-20240229", context: null, maxOutput: null },
+          { id: "glm-4-plus", name: "glm-4-plus", context: null, maxOutput: null },
+          { id: "glm-4", name: "glm-4", context: null, maxOutput: null },
+          { id: "glm-4-flash", name: "glm-4-flash", context: null, maxOutput: null },
+        ],
+        note: "Anthropic-compatible API doesn't provide a model list. These are suggested model IDs. Please verify with your API provider.",
+      };
     }
 
     try {

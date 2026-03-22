@@ -1,6 +1,6 @@
 {
   "name": "hanako-linux",
-  "version": "0.58.1-linux.4",
+  "version": "0.58.1-linux.5",
   "type": "module",
   "description": "Hanako - a personal AI agent with memory and soul (Linux/Ubuntu optimized)",
   "license": "Apache-2.0",
