@@ -301,6 +301,7 @@ export default async function sessionsRoute(app, { engine }) {
         isStreaming: engine.isStreaming,
       };
     } catch (err) {
+      console.error("[sessions] switch failed:", err);
       reply.code(500);
       return { error: err.message };
     }

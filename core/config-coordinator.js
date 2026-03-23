@@ -286,7 +286,6 @@ export class ConfigCoordinator {
   }
 
   // ── updateConfig ──
-
   async updateConfig(partial) {
     const keys = Object.keys(partial);
     if (keys.length) log.log(`updateConfig: keys=[${keys.join(",")}]`);
@@ -299,7 +298,22 @@ export class ConfigCoordinator {
 
     // 切换聊天模型：不需要 sync，模型早已注册
     if (partial.models?.chat) {
-      const newModel = models.availableModels.find(m => m.id === partial.models.chat);
+      const requestedModelId = String(partial.models.chat || "");
+      const bareModelId = requestedModelId.includes("/")
+        ? requestedModelId.slice(requestedModelId.indexOf("/") + 1)
+        : requestedModelId;
+      const scopedProvider = requestedModelId.includes("/")
+        ? requestedModelId.slice(0, requestedModelId.indexOf("/"))
+        : (partial.api?.provider || agent.config?.api?.provider || "");
+
+      let newModel = models.availableModels.find(m => m.id === requestedModelId);
+      if (!newModel) {
+        newModel = models.availableModels.find(m => m.id === bareModelId && (!scopedProvider || m.provider === scopedProvider));
+      }
+      if (!newModel) {
+        newModel = models.availableModels.find(m => m.id === bareModelId);
+      }
+
       if (newModel) {
         models.defaultModel = newModel;
         models.currentModel = newModel;
@@ -311,8 +325,11 @@ export class ConfigCoordinator {
             models.resolveThinkingLevel(this.getThinkingLevel())
           );
         }
+      } else {
+        log.warn(`requested chat model not found in available models: ${requestedModelId}`);
       }
     }
+
 
     if (partial.skills) {
       this._d.getSkills().syncAgentSkills(agent);

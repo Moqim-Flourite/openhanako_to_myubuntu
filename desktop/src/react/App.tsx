@@ -131,7 +131,7 @@ async function init(): Promise<void> {
   await loadModels();
 
   // 10. 加载 agents + sessions
-  useStore.setState({ pendingNewSession: true });
+  useStore.setState({ pendingNewSession: false });
   await loadAgents();
   await loadSessions();
 
@@ -170,47 +170,50 @@ async function init(): Promise<void> {
 
   // 19. 设置变更监听
   platform.onSettingsChanged((type: string, data: any) => {
-    switch (type) {
-      case 'agent-switched':
-      applyAgentIdentity({
-        agentName: data.agentName,
-        agentId: data.agentId,
-        yuan: data.yuan,
-      });
-      createNewSession();
-      loadSessions();
-      window.__loadDeskSkills?.();
-      break;
-      case 'skills-changed':
-        window.__loadDeskSkills?.();
-        break;
-      case 'locale-changed':
-        i18n.load(data.locale).then(() => {
+    void (async () => {
+      switch (type) {
+        case 'agent-switched':
+          await applyAgentIdentity({
+            agentName: data.agentName,
+            agentId: data.agentId,
+            yuan: data.yuan,
+          });
+          await createNewSession();
+          await loadSessions();
+          window.__loadDeskSkills?.();
+          break;
+        case 'skills-changed':
+          window.__loadDeskSkills?.();
+          break;
+        case 'locale-changed':
+          await i18n.load(data.locale);
           i18n.defaultName = useStore.getState().agentName;
           useStore.setState({ locale: i18n.locale });
-        });
-        break;
-      case 'models-changed':
-        loadModels();
-        break;
-      case 'agent-created':
-      case 'agent-deleted':
-        loadAgents();
-        break;
-      case 'agent-updated':
-        applyAgentIdentity({
-          agentName: data.agentName,
-          agentId: data.agentId,
-          ui: { settings: false },
-        });
-        break;
-      case 'theme-changed':
-        setTheme(data.theme);
-        break;
-      case 'font-changed':
-        setSerifFont(data.serif);
-        break;
-    }
+          break;
+        case 'models-changed':
+          await loadModels();
+          break;
+        case 'agent-created':
+        case 'agent-deleted':
+          await loadAgents();
+          break;
+        case 'agent-updated':
+          await applyAgentIdentity({
+            agentName: data.agentName,
+            agentId: data.agentId,
+            ui: { settings: false },
+          });
+          break;
+        case 'theme-changed':
+          setTheme(data.theme);
+          break;
+        case 'font-changed':
+          setSerifFont(data.serif);
+          break;
+      }
+    })().catch((err) => {
+      console.error('[settingsChanged] handler failed:', type, err);
+    });
   });
 
   // 20. Skill Viewer overlay（主进程 / 设置窗口 → 渲染进程）

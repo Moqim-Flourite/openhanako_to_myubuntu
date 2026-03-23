@@ -256,7 +256,8 @@ export async function ensureSession(): Promise<boolean> {
 
     useStore.setState(patch);
 
-    await loadSessions();
+    // 新建 session 后列表可能尚未反映，异步刷新即可，避免立刻 switch 回旧 session
+    void loadSessions();
 
     // updateFolderButton — no-op (React-driven)
 
