@@ -93,8 +93,10 @@ export default async function agentsRoute(app, { engine }) {
         agent: {
           id: engine.currentAgentId,
           name: engine.agentName,
+          yuan: engine.agent?.config?.agent?.yuan || "hanako",
         },
       };
+
     } catch (err) {
       reply.code(500);
       return { error: err.message };

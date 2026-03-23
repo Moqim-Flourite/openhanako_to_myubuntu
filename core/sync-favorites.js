@@ -33,11 +33,12 @@ function humanizeName(id) {
   name = name.replace(/(\d) (\d)/g, "$1.$2");
   return name;
 }
-
 import { createRequire } from "module";
 const _require = createRequire(import.meta.url);
 const _knownModels = _require("../lib/known-models.json");
+const DEFAULT_CONTEXT_WINDOW = 32768;
 function splitScopedModelRef(modelRef) {
+
   const value = String(modelRef || "").trim();
   if (!value) return { provider: "", modelId: "" };
   const slashIndex = value.indexOf("/");

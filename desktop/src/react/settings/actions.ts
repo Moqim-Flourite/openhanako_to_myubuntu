@@ -119,16 +119,18 @@ export async function switchToAgent(agentId: string) {
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-
     store.set({
       settingsAgentId: null,
       currentAgentId: data.agent.id,
       agentName: data.agent.name,
+      agentYuan: data.agent.yuan || 'hanako',
     });
     platform?.settingsChanged?.('agent-switched', {
       agentName: data.agent.name,
       agentId: data.agent.id,
+      yuan: data.agent.yuan || 'hanako',
     });
+
     await loadSettingsConfig();
     await loadAgents();
     store.showToast(t('settings.agent.switched', { name: data.agent.name }), 'success');

@@ -20,6 +20,7 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
   const [keyVal, setKeyVal] = useState('');
   const [keyEdited, setKeyEdited] = useState(false);
   const [hasStoredKey, setHasStoredKey] = useState(false);
+  const [showMaskedValue, setShowMaskedValue] = useState(true);
   const baseUrl = summary.base_url || presetInfo?.url || '';
   const api = summary.api || presetInfo?.api || '';
 
@@ -27,12 +28,17 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
     if (!keyEdited) {
       setKeyVal('');
       setHasStoredKey(!!summary.api_key_masked);
+      setShowMaskedValue(true);
     }
   }, [summary.api_key_masked, keyEdited]);
 
+  const effectiveApiKey = keyEdited ? keyVal.trim() : '';
+  const shouldUseStoredKey = !keyEdited && hasStoredKey;
+  const displayValue = !keyEdited && showMaskedValue && hasStoredKey ? (summary.api_key_masked || '') : keyVal;
+
   const verifyAndSave = async (btn: HTMLButtonElement) => {
     if (!keyEdited) return;
-    const key = keyVal.trim();
+    const key = effectiveApiKey;
     if (!key && !presetInfo?.local) return;
     btn.classList.add(styles['spinning']);
     try {
@@ -57,6 +63,8 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
       showToast(t('settings.providers.verifySuccess'), 'success');
       if (isPresetSetup) useSettingsStore.setState({ selectedProviderId: providerId });
       setKeyEdited(false);
+      setKeyVal('');
+      setShowMaskedValue(true);
       await onRefresh();
       platform?.settingsChanged?.('models-changed');
     } catch (err: unknown) {
@@ -74,7 +82,11 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
     btn.classList.add(styles['spinning']);
     try {
       const payload: Record<string, unknown> = { name: providerId, base_url: baseUrl, api };
-      if (keyEdited) payload.api_key = keyVal.trim() || undefined;
+      if (keyEdited) {
+        payload.api_key = effectiveApiKey || undefined;
+      } else if (!shouldUseStoredKey && !presetInfo?.local) {
+        payload.api_key = undefined;
+      }
       const testRes = await hanaFetch('/api/providers/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,14 +110,34 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
         <div className={styles['pv-cred-key-row']}>
           <KeyInput
             value={keyVal}
-            onChange={(v) => { setKeyVal(v); setKeyEdited(true); setHasStoredKey(false); setConnStatus('idle'); }}
-            placeholder={keyEdited ? (isPresetSetup ? t('settings.providers.setupHint') : '') : (hasStoredKey ? summary.api_key_masked || t('settings.saved') : (isPresetSetup ? t('settings.providers.setupHint') : ''))}
+            displayValue={displayValue}
+            onFocus={() => {
+              if (!keyEdited && hasStoredKey) {
+                setShowMaskedValue(false);
+              }
+            }}
+            onChange={(v) => {
+              if (!keyEdited) {
+                setKeyEdited(true);
+                setShowMaskedValue(false);
+                setKeyVal('');
+              }
+              setKeyVal(v);
+              setHasStoredKey(false);
+              setConnStatus('idle');
+            }}
+            onBlur={() => {
+              if (!keyEdited) {
+                setShowMaskedValue(true);
+              }
+            }}
+            placeholder={keyEdited ? (isPresetSetup ? t('settings.providers.setupHint') : '') : (hasStoredKey ? '' : (isPresetSetup ? t('settings.providers.setupHint') : ''))}
           />
           <button
             className={`${styles['pv-cred-conn-icon']} ${styles[connStatus] || ''}`}
             title={t('settings.providers.verifyConnection')}
             onClick={(e) => {
-              if (keyEdited && (keyVal.trim() || presetInfo?.local)) {
+              if (keyEdited && (effectiveApiKey || presetInfo?.local)) {
                 verifyAndSave(e.currentTarget);
               } else {
                 verifyOnly(e.currentTarget);

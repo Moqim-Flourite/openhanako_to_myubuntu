@@ -172,13 +172,15 @@ async function init(): Promise<void> {
   platform.onSettingsChanged((type: string, data: any) => {
     switch (type) {
       case 'agent-switched':
-        applyAgentIdentity({
-          agentName: data.agentName,
-          agentId: data.agentId,
-        });
-        loadSessions();
-        window.__loadDeskSkills?.();
-        break;
+      applyAgentIdentity({
+        agentName: data.agentName,
+        agentId: data.agentId,
+        yuan: data.yuan,
+      });
+      createNewSession();
+      loadSessions();
+      window.__loadDeskSkills?.();
+      break;
       case 'skills-changed':
         window.__loadDeskSkills?.();
         break;
