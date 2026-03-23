@@ -441,8 +441,8 @@ export default async function providersRoute(app, { engine }) {
         api_key,
         base_url,
         model: probeModel,
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 1,
+        messages: [{ role: "user", content: "Reply with OK only." }],
+        max_tokens: 8,
         temperature: 0,
         timeoutMs: 15000,
       });
