@@ -58,21 +58,26 @@ const _isDev = process.argv.includes("--dev");
 const _distRenderer = path.join(__dirname, "dist-renderer");
 
 function loadWindowURL(win, pageName, opts) {
-  if (_isDev && process.env.VITE_DEV_URL) {
-    let url = `${process.env.VITE_DEV_URL}/${pageName}.html`;
+  const devUrl = process.env.VITE_DEV_URL;
+  if (_isDev && devUrl) {
+    let url = `${devUrl}/${pageName}.html`;
     if (opts?.query && Object.keys(opts.query).length > 0) {
       const qs = new URLSearchParams(opts.query).toString();
       url += `?${qs}`;
     }
     win.loadURL(url);
-  } else {
-    const built = path.join(_distRenderer, `${pageName}.html`);
-    if (!_isDev && fs.existsSync(built)) {
-      win.loadFile(built, opts);
-    } else {
-      win.loadFile(path.join(__dirname, "src", `${pageName}.html`), opts);
-    }
+    return;
   }
+
+  const built = path.join(_distRenderer, `${pageName}.html`);
+  if (fs.existsSync(built)) {
+    win.loadFile(built, opts);
+    return;
+  }
+
+  // fallback：仅在 dist-renderer 尚未构建时才直接读 src html
+  // 注意 src html 会直接引用 .tsx 源文件，只适合配合 Vite dev server 使用
+  win.loadFile(path.join(__dirname, "src", `${pageName}.html`), opts);
 }
 
 /** 校验浏览器 URL：仅允许 http/https */
