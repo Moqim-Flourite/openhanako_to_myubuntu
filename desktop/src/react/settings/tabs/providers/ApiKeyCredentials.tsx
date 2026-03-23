@@ -38,7 +38,7 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
       const testRes = await hanaFetch('/api/providers/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base_url: baseUrl, api, api_key: key }),
+        body: JSON.stringify({ name: providerId, base_url: baseUrl, api, api_key: key }),
       });
       const testData = await testRes.json();
       if (!testData.ok) {
@@ -72,10 +72,12 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
     setConnStatus('testing');
     btn.classList.add(styles['spinning']);
     try {
+      const payload: Record<string, unknown> = { name: providerId, base_url: baseUrl, api };
+      if (keyEdited) payload.api_key = keyVal.trim() || undefined;
       const testRes = await hanaFetch('/api/providers/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base_url: baseUrl, api, api_key: (keyEdited && keyVal.trim()) || undefined }),
+        body: JSON.stringify(payload),
       });
       const testData = await testRes.json();
       setConnStatus(testData.ok ? 'ok' : 'fail');

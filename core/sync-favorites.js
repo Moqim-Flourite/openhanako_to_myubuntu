@@ -37,8 +37,19 @@ function humanizeName(id) {
 import { createRequire } from "module";
 const _require = createRequire(import.meta.url);
 const _knownModels = _require("../lib/known-models.json");
+function splitScopedModelRef(modelRef) {
+  const value = String(modelRef || "").trim();
+  if (!value) return { provider: "", modelId: "" };
+  const slashIndex = value.indexOf("/");
+  if (slashIndex > 0) {
+    return {
+      provider: value.slice(0, slashIndex),
+      modelId: value.slice(slashIndex + 1),
+    };
+  }
+  return { provider: "", modelId: value };
+}
 
-const DEFAULT_CONTEXT_WINDOW = 128_000;
 
 function generateModelDefaults(modelId) {
   const known = _knownModels[modelId];
@@ -165,13 +176,15 @@ export function syncFavoritesToModelsJson(configPath, opts = {}) {
   // ── 4. 按 provider 分组必须保留的模型 ──
   const providerModels = new Map(); // providerName → Set<modelId>
   for (const mid of mustKeep) {
-    const prov = modelToProvider.get(mid);
-    if (!prov) {
+    const { provider: scopedProvider, modelId } = splitScopedModelRef(mid);
+    const normalizedModelId = modelId?.startsWith("models/") ? modelId.slice(7) : modelId;
+    const prov = scopedProvider || modelToProvider.get(mid) || modelToProvider.get(normalizedModelId);
+    if (!prov || !normalizedModelId) {
       console.warn(`\x1b[33m  [sync] 模型 "${mid}" 未绑定 provider，跳过\x1b[0m`);
       continue;
     }
     if (!providerModels.has(prov)) providerModels.set(prov, new Set());
-    providerModels.get(prov).add(mid);
+    providerModels.get(prov).add(normalizedModelId);
   }
 
   // ── 5. 构建新的 models.json ──
