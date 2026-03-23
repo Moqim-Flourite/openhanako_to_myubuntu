@@ -19,13 +19,14 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
   const { showToast } = useSettingsStore();
   const [keyVal, setKeyVal] = useState('');
   const [keyEdited, setKeyEdited] = useState(false);
+  const [hasStoredKey, setHasStoredKey] = useState(false);
   const baseUrl = summary.base_url || presetInfo?.url || '';
   const api = summary.api || presetInfo?.api || '';
 
-  // 未编辑时，从 summary 同步遮掩值到输入框（让用户看到"已保存"）
   useEffect(() => {
-    if (!keyEdited && summary.api_key_masked) {
-      setKeyVal(summary.api_key_masked);
+    if (!keyEdited) {
+      setKeyVal('');
+      setHasStoredKey(!!summary.api_key_masked);
     }
   }, [summary.api_key_masked, keyEdited]);
 
@@ -97,8 +98,8 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
         <div className={styles['pv-cred-key-row']}>
           <KeyInput
             value={keyVal}
-            onChange={(v) => { setKeyVal(v); setKeyEdited(true); setConnStatus('idle'); }}
-            placeholder={isPresetSetup ? t('settings.providers.setupHint') : ''}
+            onChange={(v) => { setKeyVal(v); setKeyEdited(true); setHasStoredKey(false); setConnStatus('idle'); }}
+            placeholder={keyEdited ? (isPresetSetup ? t('settings.providers.setupHint') : '') : (hasStoredKey ? summary.api_key_masked || t('settings.saved') : (isPresetSetup ? t('settings.providers.setupHint') : ''))}
           />
           <button
             className={`${styles['pv-cred-conn-icon']} ${styles[connStatus] || ''}`}
