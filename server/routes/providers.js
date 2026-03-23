@@ -56,6 +56,26 @@ function buildModelEndpoints(baseUrl) {
   return urls;
 }
 
+/**
+ * 构建 chat/completions 端点 URL（用于 fallback 测试）
+ */
+function buildChatCompletionsEndpoint(baseUrl) {
+  const raw = String(baseUrl || "").trim();
+  const disableAppend = hasTrailingHash(raw);
+  const normalized = stripTrailingHash(raw);
+
+  if (!normalized) return "";
+  if (disableAppend) return normalized;
+  if (/\/chat\/completions$/i.test(normalized)) return normalized;
+  if (/\/(models|responses|messages)$/i.test(normalized)) {
+    return normalized.replace(/\/(models|responses|messages)$/i, "/chat/completions");
+  }
+  if (/\/v\d+$/i.test(normalized)) {
+    return `${normalized}/chat/completions`;
+  }
+  return `${normalized}/v1/chat/completions`;
+}
+
 
 async function fetchFirstAvailableModelEndpoint(urls, fetchOptions) {
   let lastError = null;
@@ -439,6 +459,11 @@ export default async function providersRoute(app, { engine }) {
   /**
    * 测试供应商连接
    * body: { base_url, api, api_key }
+   * 
+   * 策略：
+   * 1. 先尝试 /models 端点（标准 OpenAI 兼容）
+   * 2. 如果 /models 失败但不是 401/403（认证错误），则 fallback 到 /chat/completions 做最小化请求
+   * 3. 这样可以支持远景等不支持 /models 但支持 /chat/completions 的 OpenAI-compatible 接口
    */
   app.post("/api/providers/test", async (req, reply) => {
     const { base_url, api } = req.body || {};
@@ -484,6 +509,7 @@ export default async function providersRoute(app, { engine }) {
         return { ok: authOk, status: res.status };
       }
 
+      // === OpenAI 兼容格式测试 ===
       const urls = buildModelEndpoints(base_url);
       let headers = {};
       if (api_key) {
@@ -495,7 +521,7 @@ export default async function providersRoute(app, { engine }) {
         headers = buildProviderAuthHeaders(api, api_key);
       }
 
-      debugProviderRoute("provider-test:request", {
+      debugProviderRoute("provider-test:models-request", {
         base_url,
         api,
         urls,
@@ -503,20 +529,124 @@ export default async function providersRoute(app, { engine }) {
         headerKeys: Object.keys(headers),
       });
 
-      const { res, url } = await fetchFirstAvailableModelEndpoint(urls, {
-        headers,
-        signal: AbortSignal.timeout(10000),
-      });
+      // 第一步：尝试 /models 端点
+      let lastModelsError = null;
+      let lastModelsStatus = null;
+      
+      for (const modelUrl of urls) {
+        try {
+          const res = await fetch(modelUrl, {
+            headers,
+            signal: AbortSignal.timeout(10000),
+          });
+          debugProviderRoute("provider-test:models-response", {
+            url: modelUrl,
+            status: res.status,
+            ok: res.ok,
+          });
+          
+          if (res.ok) {
+            // /models 成功，认证有效
+            return { ok: true, status: res.status, method: "models" };
+          }
+          
+          lastModelsStatus = res.status;
+          lastModelsError = new Error(`HTTP ${res.status}: ${res.statusText}`);
+          
+          // 401/403 表示认证失败，直接返回
+          if (res.status === 401 || res.status === 403) {
+            debugProviderRoute("provider-test:auth-failed", {
+              url: modelUrl,
+              status: res.status,
+            });
+            return { ok: false, status: res.status, error: "Authentication failed (invalid API key)", method: "models" };
+          }
+          
+          // 其他错误（404、422 等）继续尝试下一个 URL 或 fallback
+        } catch (err) {
+          debugProviderRoute("provider-test:models-error", {
+            url: modelUrl,
+            error: err?.message || String(err),
+          });
+          lastModelsError = err;
+        }
+      }
 
-      debugProviderRoute("provider-test:success", {
+      // 第二步：/models 全部失败但不是认证错误，尝试 /chat/completions fallback
+      // 这样可以支持远景等不支持 /models 端点的 OpenAI-compatible 接口
+      debugProviderRoute("provider-test:trying-chat-completions-fallback", {
         base_url,
         api,
-        requestUrl: url,
-        status: res.status,
-        ok: res.ok,
+        reason: "models endpoint failed with non-auth error",
       });
 
-      return { ok: res.ok, status: res.status };
+      const chatUrl = buildChatCompletionsEndpoint(base_url);
+      if (!chatUrl) {
+        debugProviderRoute("provider-test:no-chat-url", { base_url });
+        return { ok: false, error: lastModelsError?.message || "No valid endpoint", method: "models" };
+      }
+
+      debugProviderRoute("provider-test:chat-request", {
+        chatUrl,
+        hasApiKey: !!api_key,
+        headerKeys: Object.keys(headers),
+      });
+
+      try {
+        // 发送最小化的 chat/completions 请求
+        const chatRes = await fetch(chatUrl, {
+          method: "POST",
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-3.5-turbo",  // 使用通用模型名，某些接口可能需要用户指定的模型
+            messages: [{ role: "user", content: "ping" }],
+            max_tokens: 1,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+
+        debugProviderRoute("provider-test:chat-response", {
+          chatUrl,
+          status: chatRes.status,
+          ok: chatRes.ok,
+        });
+
+        // 401/403 = 认证失败
+        if (chatRes.status === 401 || chatRes.status === 403) {
+          return { ok: false, status: chatRes.status, error: "Authentication failed (invalid API key)", method: "chat-completions" };
+        }
+
+        // 其他状态码（包括 200、400、404、422 等）都说明认证通过
+        // 因为这些错误要么是模型不存在，要么是参数错误，但不是 key 错误
+        const authOk = chatRes.status < 500;
+        
+        debugProviderRoute("provider-test:chat-auth-result", {
+          chatUrl,
+          status: chatRes.status,
+          authOk,
+        });
+
+        return { 
+          ok: authOk, 
+          status: chatRes.status, 
+          method: "chat-completions",
+          note: authOk ? "Authenticated via chat/completions (models endpoint not available)" : undefined,
+        };
+      } catch (chatErr) {
+        debugProviderRoute("provider-test:chat-error", {
+          chatUrl,
+          error: chatErr?.message || String(chatErr),
+        });
+        // chat/completions 也失败，返回原始的 models 错误
+        return { 
+          ok: false, 
+          error: lastModelsError?.message || chatErr?.message || "Connection failed",
+          method: "models",
+        };
+      }
     } catch (err) {
       debugProviderRoute("provider-test:error", {
         base_url,
