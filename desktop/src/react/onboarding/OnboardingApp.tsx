@@ -393,12 +393,14 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
     // 使用手动输入的模型 ID 或从列表选择的模型
     const finalModelId = useManualModel ? manualModelId.trim() : selectedModel;
     if (!finalModelId) return;
+    const toScopedRef = (modelId: string) => `${providerName}/${modelId}`;
+    const finalModelRef = toScopedRef(finalModelId);
 
     // Save chat model
     await hanaFetch(`/api/agents/${AGENT_ID}/config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ models: { chat: finalModelId } }),
+      body: JSON.stringify({ models: { chat: finalModelRef }, api: { provider: providerName } }),
     });
 
     // Save model list to provider (如果有列表才保存)
@@ -414,9 +416,9 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
     }
 
     // Save favorites
-    const favs = [finalModelId];
-    if (selectedUtility && !favs.includes(selectedUtility)) favs.push(selectedUtility);
-    if (selectedUtilityLarge && !favs.includes(selectedUtilityLarge)) favs.push(selectedUtilityLarge);
+    const favs = [finalModelRef];
+    if (selectedUtility && !favs.includes(toScopedRef(selectedUtility))) favs.push(toScopedRef(selectedUtility));
+    if (selectedUtilityLarge && !favs.includes(toScopedRef(selectedUtilityLarge))) favs.push(toScopedRef(selectedUtilityLarge));
     await hanaFetch('/api/favorites', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -426,8 +428,8 @@ export function OnboardingApp({ preview, skipToTutorial }: OnboardingAppProps) {
     // Save utility models to global preferences
     if (selectedUtility || selectedUtilityLarge) {
       const utilityModels: Record<string, string> = {};
-      if (selectedUtility) utilityModels.utility = selectedUtility;
-      if (selectedUtilityLarge) utilityModels.utility_large = selectedUtilityLarge;
+      if (selectedUtility) utilityModels.utility = toScopedRef(selectedUtility);
+      if (selectedUtilityLarge) utilityModels.utility_large = toScopedRef(selectedUtilityLarge);
       await hanaFetch('/api/preferences/models', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

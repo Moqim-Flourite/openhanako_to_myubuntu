@@ -2,51 +2,105 @@
  * 供应商管理 REST 路由
  */
 import { getAllProviders } from "../../lib/memory/config-loader.js";
-import { buildProviderAuthHeaders, buildModelEndpoints, buildApiEndpoint, callProviderText } from "../../lib/llm/provider-client.js";
-
-function debugProviderRoute(event, payload = {}) {
-  try {
-    console.log("[provider-route]", event, payload);
-  } catch {}
-}
-
-async function fetchFirstAvailableModelEndpoint(urls, fetchOptions) {
-  let lastError = null;
-  const candidates = [...new Set(urls)].filter(Boolean);
-  debugProviderRoute("fetchFirstAvailableModelEndpoint:start", { candidates });
-
-  for (const url of candidates) {
-    try {
-      debugProviderRoute("fetchFirstAvailableModelEndpoint:try", { url });
-      const res = await fetch(url, fetchOptions);
-      debugProviderRoute("fetchFirstAvailableModelEndpoint:response", {
-        url,
-        status: res.status,
-        statusText: res.statusText,
-        ok: res.ok,
-      });
-      if (res.ok) {
-        return { ok: true, url, res };
-      }
-      lastError = new Error(`HTTP ${res.status}: ${res.statusText}`);
-    } catch (err) {
-      debugProviderRoute("fetchFirstAvailableModelEndpoint:error", {
-        url,
-        error: err?.message || String(err),
-      });
-      lastError = err;
-    }
-  }
-  debugProviderRoute("fetchFirstAvailableModelEndpoint:failed", {
-    candidates,
-    lastError: lastError?.message || String(lastError),
-  });
-  throw lastError || new Error("No model endpoint available");
-}
+import {
+  buildAnthropicMessagesEndpoint,
+  buildOpenAIChatEndpoint,
+  buildProviderAuthHeaders,
+} from "../../lib/llm/provider-client.js";
 
 function maskKey(key) {
   if (!key || key.length < 8) return key ? "***" : "";
   return key.slice(0, 4) + "..." + key.slice(-4);
+}
+
+function stripTrailingSlash(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+
+function trimDisableSuffix(url) {
+  const raw = String(url || "").trim();
+  if (raw.endsWith("#")) {
+    return { url: raw.slice(0, -1), disableAutoAppend: true };
+  }
+  return { url: raw, disableAutoAppend: false };
+}
+
+function buildOpenAIModelCandidates(baseUrl) {
+  const { url: rawUrl, disableAutoAppend } = trimDisableSuffix(baseUrl);
+  const normalized = stripTrailingSlash(rawUrl);
+  if (!normalized) return ["/models"];
+  if (disableAutoAppend) return [normalized];
+
+  const candidates = [];
+  const push = (value) => {
+    const finalUrl = stripTrailingSlash(value);
+    if (finalUrl && !candidates.includes(finalUrl)) candidates.push(finalUrl);
+  };
+
+  if (normalized.endsWith("/models")) {
+    push(normalized);
+    return candidates;
+  }
+
+  if (normalized.endsWith("/v1/chat/completions")) {
+    push(normalized.replace(/\/chat\/completions$/, "/models"));
+    push(normalized.replace(/\/v1\/chat\/completions$/, "/models"));
+    return candidates;
+  }
+
+  if (normalized.endsWith("/chat/completions")) {
+    push(normalized.replace(/\/chat\/completions$/, "/models"));
+    return candidates;
+  }
+
+  if (normalized.endsWith("/v1/responses")) {
+    push(normalized.replace(/\/responses$/, "/models"));
+    push(normalized.replace(/\/v1\/responses$/, "/models"));
+    return candidates;
+  }
+
+  if (normalized.endsWith("/responses")) {
+    push(normalized.replace(/\/responses$/, "/models"));
+    return candidates;
+  }
+
+  push(`${normalized}/models`);
+  if (normalized.endsWith("/v1")) {
+    push(normalized.replace(/\/v1$/, "/models"));
+  }
+  return candidates;
+}
+
+async function fetchFirstSuccessfulJson(urls, options = {}) {
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        lastError = `HTTP ${res.status}: ${res.statusText}`;
+        continue;
+      }
+      const data = await res.json();
+      return { url, data };
+    } catch (err) {
+      lastError = err.message;
+    }
+  }
+  throw new Error(lastError || "All model endpoints failed");
+}
+
+async function fetchFirstResponse(urls, options = {}) {
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return { url, res };
+      lastError = `HTTP ${res.status}: ${res.statusText}`;
+    } catch (err) {
+      lastError = err.message;
+    }
+  }
+  throw new Error(lastError || "All endpoints failed");
 }
 
 export default async function providersRoute(app, { engine }) {
@@ -221,16 +275,8 @@ export default async function providersRoute(app, { engine }) {
    */
   app.post("/api/providers/fetch-models", async (req, reply) => {
     const { name, base_url, api: explicitApi, api_key } = req.body || {};
-    debugProviderRoute("fetch-models:start", {
-      name,
-      base_url,
-      explicitApi,
-      hasApiKey: !!api_key,
-      apiKeyMasked: maskKey(api_key || ""),
-    });
     if (!name && !base_url) {
       reply.code(400);
-      debugProviderRoute("fetch-models:bad-request", { error: "name or base_url is required" });
       return { error: "name or base_url is required" };
     }
 
@@ -245,15 +291,6 @@ export default async function providersRoute(app, { engine }) {
       (engine.authStorage?.getOAuthProviders?.() || []).map((provider) => provider.id),
     );
     const isOAuthProvider = !!name && oauthProviderIds.has(name);
-
-    debugProviderRoute("fetch-models:resolved-config", {
-      name,
-      effectiveBaseUrl,
-      effectiveApi,
-      hasExplicitRemoteConfig,
-      isOAuthProvider,
-      savedProviderHasKey: !!savedKey,
-    });
 
     if (isOAuthProvider && !hasExplicitRemoteConfig) {
       try {
@@ -274,7 +311,6 @@ export default async function providersRoute(app, { engine }) {
 
     if (!base_url) {
       reply.code(400);
-      debugProviderRoute("fetch-models:bad-request", { error: "base_url is required for remote model fetch", name });
       return { error: "base_url is required for remote model fetch" };
     }
 
@@ -333,33 +369,20 @@ export default async function providersRoute(app, { engine }) {
     }
 
     try {
-      const urls = buildModelEndpoints(base_url, api || "openai-completions");
-
       let headers = { "Content-Type": "application/json" };
       if (key) {
         if (!api) {
-          debugProviderRoute("fetch-models:missing-api", { name, base_url, hasKey: !!key });
           return { error: "api is required when api_key is present", models: [] };
         }
         headers = buildProviderAuthHeaders(api, key);
       }
 
-      debugProviderRoute("fetch-models:request", {
-        name,
-        base_url,
-        api,
-        hasKey: !!key,
-        keyMasked: maskKey(key),
-        urls,
-        headerKeys: Object.keys(headers),
-      });
-
-      const { res, url } = await fetchFirstAvailableModelEndpoint(urls, {
+      const candidateUrls = buildOpenAIModelCandidates(base_url);
+      const { data } = await fetchFirstSuccessfulJson(candidateUrls, {
         headers,
         signal: AbortSignal.timeout(15000),
       });
 
-      const data = await res.json();
       // OpenAI 兼容格式：{ data: [{ id, ... }] }
       // 尝试从返回里抓取上下文长度和最大输出（各 provider 扩展字段不同）
       const models = (data.data || []).map(m => ({
@@ -369,23 +392,8 @@ export default async function providersRoute(app, { engine }) {
         maxOutput: m.max_completion_tokens || m.max_output_tokens || null,
       }));
 
-      debugProviderRoute("fetch-models:success", {
-        name,
-        api,
-        requestUrl: url,
-        status: res.status,
-        modelCount: models.length,
-        sampleModels: models.slice(0, 5).map((m) => m.id),
-      });
-
       return { models };
     } catch (err) {
-      debugProviderRoute("fetch-models:error", {
-        name,
-        base_url,
-        api,
-        error: err?.message || String(err),
-      });
       return { error: err.message, models: [] };
     }
   });
@@ -393,78 +401,49 @@ export default async function providersRoute(app, { engine }) {
   /**
    * 测试供应商连接
    * body: { base_url, api, api_key }
-   * 
-   * 策略：
-   * 1. 先尝试 /models 端点（标准 OpenAI 兼容）
-   * 2. 如果 /models 失败但不是 401/403（认证错误），则 fallback 到 /chat/completions 做最小化请求
-   * 3. 这样可以支持远景等不支持 /models 但支持 /chat/completions 的 OpenAI-compatible 接口
    */
-
   app.post("/api/providers/test", async (req, reply) => {
-    const { base_url, api, model } = req.body || {};
+    const { base_url, api } = req.body || {};
+    // 清洗 API key：去除非 ASCII 字符（防止粘贴时输入法带入中文）
     const api_key = (req.body?.api_key || "").replace(/[^\x20-\x7E]/g, "").trim();
-
-    debugProviderRoute("provider-test:start", {
-      base_url,
-      api,
-      model,
-      hasApiKey: !!api_key,
-      apiKeyMasked: maskKey(api_key),
-    });
-
     if (!base_url) {
       reply.code(400);
-      debugProviderRoute("provider-test:bad-request", { error: "base_url is required" });
       return { error: "base_url is required" };
     }
-    if (!api) {
-      reply.code(400);
-      debugProviderRoute("provider-test:bad-request", { error: "api is required" });
-      return { error: "api is required" };
-    }
-
-    const probeModel = String(model || "").trim()
-      || (api === "anthropic-messages" ? "claude-3-5-haiku-20241022" : "glm-5");
 
     try {
-      const endpoint = buildApiEndpoint(base_url, api);
-      debugProviderRoute("provider-test:callProviderText", {
-        api,
-        base_url,
-        endpoint,
-        probeModel,
-        hasApiKey: !!api_key,
-      });
+      // Anthropic 格式没有 /models 端点，用最小化 messages 请求验证认证
+      if (api === "anthropic-messages") {
+        const headers = buildProviderAuthHeaders(api, api_key);
+        const endpoint = buildAnthropicMessagesEndpoint(base_url);
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ model: "test", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
+          signal: AbortSignal.timeout(10000),
+        });
+        // 401/403 = key 无效，其他错误（400 model not found 等）说明认证通过了
+        const authOk = res.status !== 401 && res.status !== 403;
+        return { ok: authOk, status: res.status };
+      }
 
-      await callProviderText({
-        api,
-        api_key,
-        base_url,
-        model: probeModel,
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 1,
-        temperature: 0,
-        timeoutMs: 15000,
-      });
+      let headers = {};
+      if (api_key) {
+        if (!api) {
+          reply.code(400);
+          return { error: "api is required when api_key is present" };
+        }
+        headers = buildProviderAuthHeaders(api, api_key);
+      }
 
-      return { ok: true, method: "callProviderText", endpoint, model: probeModel };
+      const candidateUrls = buildOpenAIModelCandidates(base_url);
+      const { res } = await fetchFirstResponse(candidateUrls, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+      return { ok: res.ok, status: res.status };
     } catch (err) {
-      const msg = err?.message || String(err);
-      debugProviderRoute("provider-test:callProviderText-error", {
-        api,
-        base_url,
-        probeModel,
-        error: msg,
-      });
-
-      const authFailed = /401|403|invalid api key|unauthorized|incorrect api key|authentication/i.test(msg);
-      return {
-        ok: false,
-        method: "callProviderText",
-        model: probeModel,
-        error: msg,
-        authFailed,
-      };
+      return { ok: false, error: err.message };
     }
   });
 }

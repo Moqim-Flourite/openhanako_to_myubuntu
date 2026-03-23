@@ -160,11 +160,16 @@ export function AgentTab() {
               onChange={async (modelId) => {
                 store.set({ pendingDefaultModel: modelId });
                 const partial: Record<string, unknown> = { models: { chat: modelId } };
-                const provs = settingsConfig?.providers || {};
-                for (const [name, p] of Object.entries(provs) as [string, { models?: string[] }][]) {
-                  if ((p.models || []).includes(modelId)) {
-                    partial.api = { provider: name };
-                    break;
+                const scopedProvider = typeof modelId === 'string' && modelId.includes('/') ? modelId.split('/')[0] : null;
+                if (scopedProvider) {
+                  partial.api = { provider: scopedProvider };
+                } else {
+                  const provs = settingsConfig?.providers || {};
+                  for (const [name, p] of Object.entries(provs) as [string, { models?: string[] }][]) {
+                    if ((p.models || []).includes(modelId)) {
+                      partial.api = { provider: name };
+                      break;
+                    }
                   }
                 }
                 await autoSaveConfig(partial, { refreshModels: true });

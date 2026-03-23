@@ -32,6 +32,13 @@ export function resolveProviderForModel(modelId: string): string | null {
   const config = useSettingsStore.getState().settingsConfig;
   if (!modelId || !config) return null;
   const providers = config.providers || {};
+
+  const slashIndex = modelId.indexOf('/');
+  if (slashIndex > 0) {
+    const scopedProvider = modelId.slice(0, slashIndex);
+    if (providers[scopedProvider]) return scopedProvider;
+  }
+
   for (const [name, p] of Object.entries(providers) as [string, any][]) {
     if ((p.models || []).includes(modelId)) return name;
   }

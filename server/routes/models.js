@@ -4,6 +4,7 @@
 import { supportsXhigh } from "@mariozechner/pi-ai";
 import { t } from "../i18n.js";
 import { createRequire } from "module";
+import { buildApiEndpoint, buildModelEndpoints, callProviderText } from "../../lib/llm/provider-client.js";
 const _require = createRequire(import.meta.url);
 const _knownModels = _require("../../lib/known-models.json");
 
@@ -88,35 +89,46 @@ export default async function modelsRoute(app, { engine }) {
       if (!apiKey) {
         try { apiKey = await engine.authStorage.getApiKey(model.provider); } catch {}
       }
-      if (!apiKey) return { ok: false, error: "no api_key" };
-
-      const { buildProviderAuthHeaders } = await import("../../lib/llm/provider-client.js");
       const api = creds.api || model.api || "openai-completions";
 
-      // Anthropic 兼容 API：发最小 messages 请求
-      if (api === "anthropic-messages") {
-        const url = baseUrl.replace(/\/+$/, "") + "/v1/messages";
-        const headers = buildProviderAuthHeaders(api, apiKey);
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: modelId, max_tokens: 1, messages: [{ role: "user", content: "." }] }),
-          signal: AbortSignal.timeout(10000),
-        });
-        // 200 或 400（参数错误但连通）都算健康
-        return { ok: res.ok || res.status === 400, status: res.status, provider: model.provider };
-      }
-
-      // OpenAI Codex Responses API：无法通过简单请求检测（Cloudflare 反爬），跳过
       if (api === "openai-codex-responses") {
         return { ok: true, status: 0, provider: model.provider, skipped: t("error.codexNoHealthCheck") };
       }
 
-      // OpenAI 兼容 API：用 /models 端点
-      const url = baseUrl.replace(/\/+$/, "") + "/models";
-      const headers = buildProviderAuthHeaders(api, apiKey);
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
-      return { ok: res.ok, status: res.status, provider: model.provider };
+      try {
+        const endpoint = buildApiEndpoint(baseUrl, api);
+        await callProviderText({
+          api,
+          api_key: apiKey,
+          base_url: baseUrl,
+          model: modelId,
+          messages: [{ role: "user", content: "." }],
+          max_tokens: 1,
+          temperature: 0,
+          timeoutMs: 10000,
+        });
+        return { ok: true, status: 200, provider: model.provider, method: "callProviderText", endpoint };
+      } catch (err) {
+        const msg = err?.message || String(err);
+        const authFailed = /401|403|invalid api key|unauthorized|incorrect api key|authentication/i.test(msg);
+
+        if (!authFailed && api !== "anthropic-messages") {
+          const urls = buildModelEndpoints(baseUrl, api);
+          for (const url of urls) {
+            try {
+              const headers = apiKey
+                ? (await import("../../lib/llm/provider-client.js")).buildProviderAuthHeaders(api, apiKey)
+                : { "Content-Type": "application/json" };
+              const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+              if (res.ok) {
+                return { ok: true, status: res.status, provider: model.provider, method: "models", endpoint: url };
+              }
+            } catch {}
+          }
+        }
+
+        return { ok: false, error: msg, provider: model.provider, method: "callProviderText" };
+      }
     } catch (err) {
       return { ok: false, error: err.message };
     }

@@ -1,23 +1,4 @@
 import { t } from "../../server/i18n.js";
-
-function maskKey(key = "") {
-  if (!key) return "";
-  if (key.length <= 8) return "***";
-  return `${key.slice(0, 4)}...${key.slice(-4)}`;
-}
-
-function previewText(value, max = 300) {
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  if (!text) return "";
-  return text.length > max ? `${text.slice(0, max)}...` : text;
-}
-
-function debugProviderClient(event, payload = {}) {
-  try {
-    console.log("[provider-client]", event, payload);
-  } catch {}
-}
-
 function stripTrailingSlash(url) {
   return String(url || "").replace(/\/+$/, "");
 }
@@ -30,110 +11,33 @@ function hasTrailingHash(url) {
   return /#$/.test(String(url || "").trim());
 }
 
-export function normalizeProviderBaseUrl(baseUrl) {
+function buildApiEndpoint(baseUrl, api) {
   const raw = String(baseUrl || "").trim();
-  return {
-    raw,
-    disableAppend: hasTrailingHash(raw),
-    normalized: stripTrailingHash(raw),
-  };
-}
-
-export function buildApiEndpoint(baseUrl, api) {
-  const { raw, disableAppend, normalized } = normalizeProviderBaseUrl(baseUrl);
-  let endpoint = normalized;
+  const disableAppend = hasTrailingHash(raw);
+  const normalized = stripTrailingHash(raw);
 
   if (api === "openai-completions") {
     if (/\/chat\/completions$/i.test(normalized)) {
-      endpoint = normalized;
-    } else if (/\/(models|responses|messages)$/i.test(normalized)) {
-      endpoint = normalized.replace(/\/(models|responses|messages)$/i, "/chat/completions");
-    } else if (/\/v\d+$/i.test(normalized)) {
-      endpoint = `${normalized}/chat/completions`;
-    } else {
-      endpoint = disableAppend ? normalized : `${normalized}/v1/chat/completions`;
+      return normalized;
     }
-    debugProviderClient("buildApiEndpoint", { api, raw, normalized, disableAppend, endpoint });
-    return endpoint;
+    return disableAppend ? normalized : `${normalized}/chat/completions`;
   }
 
   if (api === "anthropic-messages") {
     if (/\/messages$/i.test(normalized)) {
-      endpoint = normalized;
-    } else if (/\/anthropic$/i.test(normalized)) {
-      endpoint = disableAppend ? normalized : `${normalized}/v1/messages`;
-    } else if (/\/v\d+$/i.test(normalized)) {
-      endpoint = `${normalized}/messages`;
-    } else {
-      endpoint = disableAppend ? normalized : `${normalized}/v1/messages`;
+      return normalized;
     }
-    debugProviderClient("buildApiEndpoint", { api, raw, normalized, disableAppend, endpoint });
-    return endpoint;
+    return disableAppend ? normalized : `${normalized}/messages`;
   }
 
   if (api === "openai-codex-responses" || api === "openai-responses") {
     if (/\/responses$/i.test(normalized)) {
-      endpoint = normalized;
-    } else if (/\/(chat\/completions|models|messages)$/i.test(normalized)) {
-      endpoint = normalized.replace(/\/(chat\/completions|models|messages)$/i, "/responses");
-    } else if (/\/v\d+$/i.test(normalized)) {
-      endpoint = `${normalized}/responses`;
-    } else {
-      endpoint = disableAppend ? normalized : `${normalized}/v1/responses`;
+      return normalized;
     }
-    debugProviderClient("buildApiEndpoint", { api, raw, normalized, disableAppend, endpoint });
-    return endpoint;
+    return disableAppend ? normalized : `${normalized}/responses`;
   }
 
-  debugProviderClient("buildApiEndpoint", { api, raw, normalized, disableAppend, endpoint });
-  return endpoint;
-}
-
-export function extractProviderBaseOrigin(fullUrl) {
-  try {
-    const url = new URL(String(fullUrl || "").trim());
-    const path = url.pathname || "";
-    const match = path.match(/\/v\d+(?=\/|$)/i);
-    const prefix = match ? path.slice(0, match.index) : "";
-    return `${url.protocol}//${url.host}${prefix}`.replace(/\/+$/, "");
-  } catch {
-    return stripTrailingHash(fullUrl || "");
-  }
-}
-
-export function buildModelEndpoints(baseUrl, api = "openai-completions") {
-  const { raw, disableAppend, normalized } = normalizeProviderBaseUrl(baseUrl);
-  let urls = [];
-
-  if (!normalized) {
-    debugProviderClient("buildModelEndpoints", { raw, normalized, disableAppend, api, urls });
-    return urls;
-  }
-  if (disableAppend) {
-    urls = [normalized];
-    debugProviderClient("buildModelEndpoints", { raw, normalized, disableAppend, api, urls });
-    return urls;
-  }
-  if (/\/models$/i.test(normalized)) {
-    urls = [normalized];
-    debugProviderClient("buildModelEndpoints", { raw, normalized, disableAppend, api, urls });
-    return urls;
-  }
-
-  const endpoint = buildApiEndpoint(normalized, api);
-  const baseOrigin = extractProviderBaseOrigin(endpoint);
-
-  if (api === "anthropic-messages") {
-    urls = [`${baseOrigin}/v1/models`];
-    debugProviderClient("buildModelEndpoints", { raw, normalized, disableAppend, api, endpoint, baseOrigin, urls });
-    return urls;
-  }
-
-  const primary = `${baseOrigin}/v1/models`;
-  const fallback = `${baseOrigin}/models`;
-  urls = primary === fallback ? [primary] : [primary, fallback];
-  debugProviderClient("buildModelEndpoints", { raw, normalized, disableAppend, api, endpoint, baseOrigin, urls });
-  return urls;
+  return normalized;
 }
 
 
@@ -234,13 +138,6 @@ function extractAnthropicText(data) {
 
 export function buildProviderAuthHeaders(api, apiKey, opts = {}) {
   const allowMissingApiKey = opts.allowMissingApiKey === true;
-  debugProviderClient("buildProviderAuthHeaders:start", {
-    api,
-    allowMissingApiKey,
-    hasApiKey: !!apiKey,
-    apiKeyMasked: maskKey(apiKey),
-  });
-
   if (!api) {
     throw new Error(t("error.missingApiProtocol"));
   }
@@ -254,11 +151,6 @@ export function buildProviderAuthHeaders(api, apiKey, opts = {}) {
       "anthropic-version": "2023-06-01",
     };
     if (apiKey) headers["x-api-key"] = apiKey;
-    debugProviderClient("buildProviderAuthHeaders:result", {
-      api,
-      headerKeys: Object.keys(headers),
-      hasApiKey: !!apiKey,
-    });
     return headers;
   }
 
@@ -267,11 +159,6 @@ export function buildProviderAuthHeaders(api, apiKey, opts = {}) {
       "Content-Type": "application/json",
     };
     if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-    debugProviderClient("buildProviderAuthHeaders:result", {
-      api,
-      headerKeys: Object.keys(headers),
-      hasApiKey: !!apiKey,
-    });
     return headers;
   }
 
@@ -304,10 +191,8 @@ export async function callProviderText({
   let endpoint = "";
   let body = null;
   let extractText = () => "";
-  let branch = "";
 
   if (api === "openai-completions") {
-    branch = "openai-completions";
     endpoint = buildApiEndpoint(baseUrl, api);
     body = {
       model,
@@ -318,7 +203,6 @@ export async function callProviderText({
     };
     extractText = extractOpenAIText;
   } else if (api === "anthropic-messages") {
-    branch = "anthropic-messages";
     const anthropic = buildAnthropicPayload(combinedMessages);
     endpoint = buildApiEndpoint(baseUrl, api);
     body = {
@@ -330,7 +214,6 @@ export async function callProviderText({
     };
     extractText = extractAnthropicText;
   } else if (api === "openai-codex-responses" || api === "openai-responses") {
-    branch = api;
     const responseInput = combinedMessages
       .filter((message) => message.role !== "system")
       .map((message) => ({
@@ -350,22 +233,6 @@ export async function callProviderText({
     throw new Error(t("error.unsupportedApiProtocol", { api }));
   }
 
-  debugProviderClient("callProviderText:request", {
-    api,
-    branch,
-    model,
-    base_url,
-    normalizedBaseUrl: baseUrl,
-    endpoint,
-    hasApiKey: !!api_key,
-    apiKeyMasked: maskKey(api_key),
-    messageCount: combinedMessages.length,
-    hasSystemPrompt: !!systemPrompt,
-    temperature,
-    max_tokens,
-    bodyPreview: previewText(body),
-  });
-
   const res = await fetch(endpoint, {
     method: "POST",
     headers,
@@ -374,28 +241,10 @@ export async function callProviderText({
   });
 
   const rawText = await res.text();
-  debugProviderClient("callProviderText:response", {
-    api,
-    branch,
-    model,
-    endpoint,
-    status: res.status,
-    ok: res.ok,
-    rawPreview: previewText(rawText),
-  });
-
   let data = null;
   try {
     data = rawText ? JSON.parse(rawText) : null;
   } catch {
-    debugProviderClient("callProviderText:invalid-json", {
-      api,
-      branch,
-      model,
-      endpoint,
-      status: res.status,
-      rawPreview: previewText(rawText),
-    });
     throw new Error(t("error.llmInvalidJson", { status: res.status }));
   }
 
@@ -405,39 +254,12 @@ export async function callProviderText({
       data?.message ||
       rawText ||
       `HTTP ${res.status}`;
-    debugProviderClient("callProviderText:error-response", {
-      api,
-      branch,
-      model,
-      endpoint,
-      status: res.status,
-      message: previewText(message),
-    });
     throw new Error(message);
   }
 
   const text = extractText(data);
   if (!text) {
-    debugProviderClient("callProviderText:empty-response", {
-      api,
-      branch,
-      model,
-      endpoint,
-      status: res.status,
-      dataPreview: previewText(data),
-    });
     throw new Error(t("error.llmEmptyResponse"));
   }
-
-  debugProviderClient("callProviderText:success", {
-    api,
-    branch,
-    model,
-    endpoint,
-    status: res.status,
-    textPreview: previewText(text),
-    textLength: text.length,
-  });
-
   return text;
 }
