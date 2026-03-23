@@ -4,6 +4,93 @@
 import { getAllProviders } from "../../lib/memory/config-loader.js";
 import { buildProviderAuthHeaders } from "../../lib/llm/provider-client.js";
 
+function debugProviderRoute(event, payload = {}) {
+  try {
+    console.log("[provider-route]", event, payload);
+  } catch {}
+}
+
+function stripTrailingSlash(url) {
+  return String(url || "").replace(/\/+$/, "");
+}
+
+function stripTrailingHash(url) {
+  return stripTrailingSlash(String(url || "").replace(/#+$/, ""));
+}
+
+function hasTrailingHash(url) {
+  return /#$/.test(String(url || "").trim());
+}
+function buildModelEndpoints(baseUrl) {
+  const raw = String(baseUrl || "").trim();
+  const disableAppend = hasTrailingHash(raw);
+  const normalized = stripTrailingHash(raw);
+  let urls = [];
+
+  if (!normalized) {
+    debugProviderRoute("buildModelEndpoints", { raw, normalized, disableAppend, urls });
+    return urls;
+  }
+  if (disableAppend) {
+    urls = [normalized];
+    debugProviderRoute("buildModelEndpoints", { raw, normalized, disableAppend, urls });
+    return urls;
+  }
+  if (/\/models$/i.test(normalized)) {
+    urls = [normalized];
+    debugProviderRoute("buildModelEndpoints", { raw, normalized, disableAppend, urls });
+    return urls;
+  }
+  if (/\/(chat\/completions|responses|messages)$/i.test(normalized)) {
+    urls = [normalized.replace(/\/(chat\/completions|responses|messages)$/i, "/models")];
+    debugProviderRoute("buildModelEndpoints", { raw, normalized, disableAppend, urls });
+    return urls;
+  }
+  if (/\/v\d+$/i.test(normalized)) {
+    urls = [`${normalized}/models`, `${stripTrailingSlash(normalized.replace(/\/v\d+$/i, ""))}/models`];
+    debugProviderRoute("buildModelEndpoints", { raw, normalized, disableAppend, urls });
+    return urls;
+  }
+  urls = [`${normalized}/models`, `${normalized}/v1/models`];
+  debugProviderRoute("buildModelEndpoints", { raw, normalized, disableAppend, urls });
+  return urls;
+}
+
+
+async function fetchFirstAvailableModelEndpoint(urls, fetchOptions) {
+  let lastError = null;
+  const candidates = [...new Set(urls)].filter(Boolean);
+  debugProviderRoute("fetchFirstAvailableModelEndpoint:start", { candidates });
+
+  for (const url of candidates) {
+    try {
+      debugProviderRoute("fetchFirstAvailableModelEndpoint:try", { url });
+      const res = await fetch(url, fetchOptions);
+      debugProviderRoute("fetchFirstAvailableModelEndpoint:response", {
+        url,
+        status: res.status,
+        statusText: res.statusText,
+        ok: res.ok,
+      });
+      if (res.ok) {
+        return { ok: true, url, res };
+      }
+      lastError = new Error(`HTTP ${res.status}: ${res.statusText}`);
+    } catch (err) {
+      debugProviderRoute("fetchFirstAvailableModelEndpoint:error", {
+        url,
+        error: err?.message || String(err),
+      });
+      lastError = err;
+    }
+  }
+  debugProviderRoute("fetchFirstAvailableModelEndpoint:failed", {
+    candidates,
+    lastError: lastError?.message || String(lastError),
+  });
+  throw lastError || new Error("No model endpoint available");
+}
+
 function maskKey(key) {
   if (!key || key.length < 8) return key ? "***" : "";
   return key.slice(0, 4) + "..." + key.slice(-4);
@@ -181,8 +268,16 @@ export default async function providersRoute(app, { engine }) {
    */
   app.post("/api/providers/fetch-models", async (req, reply) => {
     const { name, base_url, api: explicitApi, api_key } = req.body || {};
+    debugProviderRoute("fetch-models:start", {
+      name,
+      base_url,
+      explicitApi,
+      hasApiKey: !!api_key,
+      apiKeyMasked: maskKey(api_key || ""),
+    });
     if (!name && !base_url) {
       reply.code(400);
+      debugProviderRoute("fetch-models:bad-request", { error: "name or base_url is required" });
       return { error: "name or base_url is required" };
     }
 
@@ -197,6 +292,15 @@ export default async function providersRoute(app, { engine }) {
       (engine.authStorage?.getOAuthProviders?.() || []).map((provider) => provider.id),
     );
     const isOAuthProvider = !!name && oauthProviderIds.has(name);
+
+    debugProviderRoute("fetch-models:resolved-config", {
+      name,
+      effectiveBaseUrl,
+      effectiveApi,
+      hasExplicitRemoteConfig,
+      isOAuthProvider,
+      savedProviderHasKey: !!savedKey,
+    });
 
     if (isOAuthProvider && !hasExplicitRemoteConfig) {
       try {
@@ -217,6 +321,7 @@ export default async function providersRoute(app, { engine }) {
 
     if (!base_url) {
       reply.code(400);
+      debugProviderRoute("fetch-models:bad-request", { error: "base_url is required for remote model fetch", name });
       return { error: "base_url is required for remote model fetch" };
     }
 
@@ -275,22 +380,30 @@ export default async function providersRoute(app, { engine }) {
     }
 
     try {
-      const url = base_url.replace(/\/+$/, "") + "/models";
+      const urls = buildModelEndpoints(base_url);
       let headers = { "Content-Type": "application/json" };
       if (key) {
         if (!api) {
+          debugProviderRoute("fetch-models:missing-api", { name, base_url, hasKey: !!key });
           return { error: "api is required when api_key is present", models: [] };
         }
         headers = buildProviderAuthHeaders(api, key);
       }
-      const res = await fetch(url, {
+
+      debugProviderRoute("fetch-models:request", {
+        name,
+        base_url,
+        api,
+        hasKey: !!key,
+        keyMasked: maskKey(key),
+        urls,
+        headerKeys: Object.keys(headers),
+      });
+
+      const { res, url } = await fetchFirstAvailableModelEndpoint(urls, {
         headers,
         signal: AbortSignal.timeout(15000),
       });
-
-      if (!res.ok) {
-        return { error: `HTTP ${res.status}: ${res.statusText}`, models: [] };
-      }
 
       const data = await res.json();
       // OpenAI 兼容格式：{ data: [{ id, ... }] }
@@ -302,8 +415,23 @@ export default async function providersRoute(app, { engine }) {
         maxOutput: m.max_completion_tokens || m.max_output_tokens || null,
       }));
 
+      debugProviderRoute("fetch-models:success", {
+        name,
+        api,
+        requestUrl: url,
+        status: res.status,
+        modelCount: models.length,
+        sampleModels: models.slice(0, 5).map((m) => m.id),
+      });
+
       return { models };
     } catch (err) {
+      debugProviderRoute("fetch-models:error", {
+        name,
+        base_url,
+        api,
+        error: err?.message || String(err),
+      });
       return { error: err.message, models: [] };
     }
   });
@@ -316,8 +444,17 @@ export default async function providersRoute(app, { engine }) {
     const { base_url, api } = req.body || {};
     // 清洗 API key：去除非 ASCII 字符（防止粘贴时输入法带入中文）
     const api_key = (req.body?.api_key || "").replace(/[^\x20-\x7E]/g, "").trim();
+
+    debugProviderRoute("provider-test:start", {
+      base_url,
+      api,
+      hasApiKey: !!api_key,
+      apiKeyMasked: maskKey(api_key),
+    });
+
     if (!base_url) {
       reply.code(400);
+      debugProviderRoute("provider-test:bad-request", { error: "base_url is required" });
       return { error: "base_url is required" };
     }
 
@@ -326,7 +463,12 @@ export default async function providersRoute(app, { engine }) {
       if (api === "anthropic-messages") {
         const baseUrl = base_url.replace(/\/+$/, "");
         const headers = buildProviderAuthHeaders(api, api_key);
-        const res = await fetch(baseUrl + "/messages", {
+        const testUrl = baseUrl + "/messages";
+        debugProviderRoute("provider-test:anthropic-request", {
+          testUrl,
+          headerKeys: Object.keys(headers),
+        });
+        const res = await fetch(testUrl, {
           method: "POST",
           headers,
           body: JSON.stringify({ model: "test", max_tokens: 1, messages: [{ role: "user", content: "hi" }] }),
@@ -334,24 +476,53 @@ export default async function providersRoute(app, { engine }) {
         });
         // 401/403 = key 无效，其他错误（400 model not found 等）说明认证通过了
         const authOk = res.status !== 401 && res.status !== 403;
+        debugProviderRoute("provider-test:anthropic-response", {
+          testUrl,
+          status: res.status,
+          ok: authOk,
+        });
         return { ok: authOk, status: res.status };
       }
 
-      const url = base_url.replace(/\/+$/, "") + "/models";
+      const urls = buildModelEndpoints(base_url);
       let headers = {};
       if (api_key) {
         if (!api) {
           reply.code(400);
+          debugProviderRoute("provider-test:missing-api", { base_url, hasApiKey: !!api_key });
           return { error: "api is required when api_key is present" };
         }
         headers = buildProviderAuthHeaders(api, api_key);
       }
-      const res = await fetch(url, {
+
+      debugProviderRoute("provider-test:request", {
+        base_url,
+        api,
+        urls,
+        hasApiKey: !!api_key,
+        headerKeys: Object.keys(headers),
+      });
+
+      const { res, url } = await fetchFirstAvailableModelEndpoint(urls, {
         headers,
         signal: AbortSignal.timeout(10000),
       });
+
+      debugProviderRoute("provider-test:success", {
+        base_url,
+        api,
+        requestUrl: url,
+        status: res.status,
+        ok: res.ok,
+      });
+
       return { ok: res.ok, status: res.status };
     } catch (err) {
+      debugProviderRoute("provider-test:error", {
+        base_url,
+        api,
+        error: err?.message || String(err),
+      });
       return { ok: false, error: err.message };
     }
   });
