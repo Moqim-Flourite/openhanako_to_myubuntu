@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.58.1-linux.8] - 2026-03-23
+### Fixed
+- **OpenAI-compatible 自定义 API 兼容性修复**：统一 URL 规范化逻辑，避免当 `base_url` 已包含 `/chat/completions`、`/responses`、`/messages` 时被重复拼接
+- **模型发现与连接测试补全**：`/api/providers/fetch-models` 与 `/api/providers/test` 现在会根据 `base_url` 自动尝试 `/models`、`/v1/models`，并支持将完整终端地址反推为模型列表地址
+- **Onboarding 模型引用修复**：引导完成时保存的 `chat`、`favorites`、`utility`、`utility_large` 模型统一改为 `provider/model` 格式，避免主界面无法绑定 provider 凭证
+
 ## [0.58.1-linux.7] - 2026-03-23
 ### Added
 - **手动输入模型 ID 功能**: 在 Onboarding 模型选择页面添加手动输入选项
