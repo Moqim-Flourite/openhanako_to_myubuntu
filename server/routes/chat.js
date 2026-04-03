@@ -34,24 +34,44 @@ function extractText(content) {
 
 function extractAssistantTextFromEvent(event) {
   if (!event || typeof event !== "object") return "";
+  const roleCandidates = [
+    event.role,
+    event.message?.role,
+    event.assistantMessage?.role,
+    event.data?.role,
+  ];
+  const role = roleCandidates.find(r => typeof r === "string" && r.trim()) || "";
+  if (role && role !== "assistant") return "";
+
   const candidates = [
-    event.content,
-    event.message?.content,
     event.assistantMessage?.content,
+    event.message?.content,
     event.data?.content,
+    event.content,
   ];
   for (const content of candidates) {
     const text = extractText(content).trim();
     if (text) return text;
   }
   const directTextCandidates = [
-    event.text,
-    event.message?.text,
     event.assistantMessage?.text,
+    event.message?.text,
     event.data?.text,
+    event.text,
   ];
   for (const text of directTextCandidates) {
     if (typeof text === "string" && text.trim()) return text.trim();
+  }
+  return "";
+}
+
+function extractLastAssistantTextFromSession(session) {
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg?.role !== "assistant") continue;
+    const text = extractText(msg.content).trim();
+    if (text) return text;
   }
   return "";
 }
@@ -257,63 +277,20 @@ export default async function chatRoute(app, { engine, hub }) {
       }
     } else if (event.type === "message_end") {
       if (!ss) return;
+      const role = event.role || event.message?.role || event.assistantMessage?.role || event.data?.role || "-";
+      const preview = (
+        extractText(event.assistantMessage?.content)
+        || extractText(event.message?.content)
+        || extractText(event.data?.content)
+        || extractText(event.content)
+        || event.assistantMessage?.text
+        || event.message?.text
+        || event.data?.text
+        || event.text
+        || ""
+      ).slice(0, 120).replace(/\n/g, "\\n");
       const fullText = extractAssistantTextFromEvent(event);
-      debugLog()?.log("ws", `[chat/event] type=message_end session=${sessionPath || "-"} active=${isActive} textLength=${fullText.length} hasOutput=${!!ss.hasOutput}`);
-      if (fullText) {
-        ss.hasOutput = true;
-        if (ss.isThinking) {
-          ss.isThinking = false;
-          emitStreamEvent(sessionPath, ss, { type: "thinking_end" });
-        }
-        ss.thinkTagParser.feed(fullText, (tEvt) => {
-          switch (tEvt.type) {
-            case "think_start":
-              emitStreamEvent(sessionPath, ss, { type: "thinking_start" });
-              break;
-            case "think_text":
-              emitStreamEvent(sessionPath, ss, { type: "thinking_delta", delta: tEvt.data });
-              break;
-            case "think_end":
-              emitStreamEvent(sessionPath, ss, { type: "thinking_end" });
-              break;
-            case "text":
-              ss.moodParser.feed(tEvt.data, (evt) => {
-                switch (evt.type) {
-                  case "text":
-                    ss.xingParser.feed(evt.data, (xEvt) => {
-                      switch (xEvt.type) {
-                        case "text":
-                          ss.titlePreview += xEvt.data || "";
-                          emitStreamEvent(sessionPath, ss, { type: "text_delta", delta: xEvt.data });
-                          maybeGenerateFirstTurnTitle(sessionPath, ss);
-                          break;
-                        case "xing_start":
-                          emitStreamEvent(sessionPath, ss, { type: "xing_start", title: xEvt.title });
-                          break;
-                        case "xing_text":
-                          emitStreamEvent(sessionPath, ss, { type: "xing_text", delta: xEvt.data });
-                          break;
-                        case "xing_end":
-                          emitStreamEvent(sessionPath, ss, { type: "xing_end" });
-                          break;
-                      }
-                    });
-                    break;
-                  case "mood_start":
-                    emitStreamEvent(sessionPath, ss, { type: "mood_start" });
-                    break;
-                  case "mood_text":
-                    emitStreamEvent(sessionPath, ss, { type: "mood_text", delta: evt.data });
-                    break;
-                  case "mood_end":
-                    emitStreamEvent(sessionPath, ss, { type: "mood_end" });
-                    break;
-                }
-              });
-              break;
-          }
-        });
-      }
+      debugLog()?.log("ws", `[chat/event] type=message_end session=${sessionPath || "-"} active=${isActive} role=${role} accepted=${fullText ? "yes" : "no"} textLength=${fullText.length} preview=${JSON.stringify(preview)}`);
     } else if (event.type === "tool_execution_start") {
       if (!ss) return;
       debugLog()?.log("ws", `[chat/event] type=tool_execution_start session=${sessionPath || "-"} tool=${event.toolName || "-"} active=${isActive}`);
@@ -533,6 +510,17 @@ export default async function chatRoute(app, { engine, hub }) {
           emitStreamEvent(sessionPath, ss, { type: "xing_text", delta: xEvt.data });
         }
       });
+
+      if (!ss.hasOutput) {
+        const session = engine.getSessionByPath(sessionPath);
+        const fallbackText = extractLastAssistantTextFromSession(session);
+        debugLog()?.log("ws", `[chat/turn-end-fallback] session=${sessionPath || "-"} active=${isActive} fallbackTextLength=${fallbackText.length}`);
+        if (fallbackText) {
+          ss.hasOutput = true;
+          emitStreamEvent(sessionPath, ss, { type: "text_delta", delta: fallbackText });
+          maybeGenerateFirstTurnTitle(sessionPath, ss);
+        }
+      }
 
       // 空回复检测：本轮没有文本输出也没有工具调用，提示用户检查配置
       if (!ss.hasOutput && !ss.hasToolCall && isActive) {
