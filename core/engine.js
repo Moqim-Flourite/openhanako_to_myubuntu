@@ -50,6 +50,7 @@ import {
 } from "./llm-utils.js";
 import { debugLog } from "../lib/debug-log.js";
 import { createSandboxedTools } from "../lib/sandbox/index.js";
+import { applyCustomToolPolicy, resolveToolPolicyMode } from "../lib/tools/tool-policy.js";
 import { t } from "../server/i18n.js";
 
 export class HanaEngine {
@@ -539,8 +540,13 @@ export class HanaEngine {
     const effectiveWorkspace = opts.workspace !== undefined ? opts.workspace : this.homeCwd;
     const sandboxEnabled = this._readPreferences().sandbox !== false;
     const effectiveMode = opts.mode || (sandboxEnabled ? "standard" : "full-access");
+    const policyMode = resolveToolPolicyMode({
+      readOnly: opts.readOnly === true,
+      safe: opts.safe === true,
+    });
+    const filteredCustomTools = applyCustomToolPolicy(ct, policyMode);
 
-    return createSandboxedTools(cwd, ct, {
+    return createSandboxedTools(cwd, filteredCustomTools, {
       agentDir: effectiveAgentDir,
       workspace: effectiveWorkspace,
       hanakoHome: this.hanakoHome,

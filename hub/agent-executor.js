@@ -59,12 +59,15 @@ export async function runAgentSession(agentId, rounds, { engine, signal, session
     tools = [];
     customTools = [];
   } else {
-    const built = ctx.buildTools(cwd, agent.tools, { agentDir, workspace: engine.homeCwd });
+    const built = ctx.buildTools(cwd, agent.tools, {
+      agentDir,
+      workspace: engine.homeCwd,
+      readOnly,
+    });
     if (readOnly) {
       const READ_ONLY_BUILTIN = ["read", "grep", "find", "ls"];
-      const READ_ONLY_CUSTOM = ["search_memory", "recall_experience", "web_search", "web_fetch"];
       tools = built.tools.filter(t => READ_ONLY_BUILTIN.includes(t.name));
-      customTools = (built.customTools || []).filter(t => READ_ONLY_CUSTOM.includes(t.name));
+      customTools = built.customTools || [];
     } else {
       tools = built.tools;
       customTools = built.customTools;
