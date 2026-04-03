@@ -76,12 +76,42 @@ const ToolIndicator = memo(function ToolIndicator({ tool }: { tool: ToolCall }) 
 
   // 如果 args 里有 tag 类型信息（如 agent 名）
   const tag = tool.args?.agentId as string | undefined;
+  const categoryLabelMap: Record<string, string> = {
+    search: '搜索',
+    web: '网页',
+    browser: '浏览器',
+    memory: '记忆',
+    planning: '规划',
+    automation: '自动化',
+    system: '系统',
+    filesystem: '文件',
+    artifact: '产物',
+    settings: '设置',
+    agent: '代理',
+    general: '通用',
+  };
+  const delegateMode = (tool.details?.mode || tool.args?.mode) as string | undefined;
+  const delegateModeLabelMap: Record<string, string> = {
+    'read-only': '子代理·只读',
+    safe: '子代理·安全',
+    full: '子代理·完全',
+  };
+  const metaTags = [
+    tool.name === 'delegate' && delegateMode ? (delegateModeLabelMap[delegateMode] || delegateMode) : null,
+    tool.meta?.category ? (categoryLabelMap[tool.meta.category] || tool.meta.category) : null,
+    tool.meta?.readOnly ? '只读' : null,
+    tool.meta?.requiresConfirmation ? '需确认' : null,
+    tool.meta?.destructive ? '高风险' : null,
+  ].filter(Boolean) as string[];
 
   return (
     <div className={styles.toolIndicator} data-tool={tool.name} data-done={String(tool.done)}>
       <span className={styles.toolDesc}>{label}</span>
       {detail && <span className={styles.toolDetail}>{detail}</span>}
       {tag && <span className={styles.toolTag}>{tag}</span>}
+      {metaTags.map((metaTag) => (
+        <span key={metaTag} className={styles.toolTag}>{metaTag}</span>
+      ))}
       {tool.done ? (
         <span className={`${styles.toolStatus} ${tool.success ? styles.toolStatusDone : styles.toolStatusFailed}`}>
           {tool.success ? '✓' : '✗'}

@@ -499,7 +499,14 @@ export class SessionCoordinator {
       const execModel = models.resolveExecutionModel(resolvedModel);
       tempSessionMgr = SessionManager.create(execCwd, sessionDir);
       const { tools: allBuiltinTools, customTools: allCustomTools } = this._d.buildTools(
-        execCwd, targetAgent.tools, { agentDir: targetAgent.agentDir, workspace: this._d.getHomeCwd() }
+        execCwd,
+        targetAgent.tools,
+        {
+          agentDir: targetAgent.agentDir,
+          workspace: this._d.getHomeCwd(),
+          readOnly: opts.readOnly === true,
+          safe: opts.safe === true,
+        }
       );
 
       const patrolAllowed = opts.toolFilter

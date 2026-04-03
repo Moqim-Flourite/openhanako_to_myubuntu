@@ -171,16 +171,22 @@ export class BridgeSessionManager {
         // owner 模式：完整 agent
         const prefs = this._deps.getPreferences();
         const bridgeReadOnly = !!prefs.bridge?.readOnly;
+        const bridgeSafe = prefs.bridge?.safe !== false;
         const bridgeCwd = homeCwd;
-        const { tools: baseTools, customTools: baseCustomTools } = this._deps.buildTools(bridgeCwd, null, { workspace: homeCwd });
+        const { tools: baseTools, customTools: baseCustomTools } = this._deps.buildTools(
+          bridgeCwd,
+          null,
+          {
+            workspace: homeCwd,
+            readOnly: bridgeReadOnly,
+            safe: !bridgeReadOnly && bridgeSafe,
+          }
+        );
 
         const bridgeTools = bridgeReadOnly
           ? baseTools.filter(t => READ_ONLY_BUILTIN_TOOLS.includes(t.name))
           : baseTools;
-        const safeCustomNames = ["search_memory", "web_search", "web_fetch", "present_files"];
-        const bridgeCustomTools = bridgeReadOnly
-          ? (baseCustomTools || []).filter(t => safeCustomNames.includes(t.name))
-          : baseCustomTools;
+        const bridgeCustomTools = baseCustomTools;
 
         // 使用 agent 配置的模型
         const ownerModelId = agent.config?.models?.chat;
