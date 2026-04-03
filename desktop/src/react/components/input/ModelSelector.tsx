@@ -4,7 +4,7 @@ import { hanaFetch } from '../../hooks/use-hana-fetch';
 import { useI18n } from '../../hooks/use-i18n';
 import styles from './InputArea.module.css';
 
-export function ModelSelector({ models }: { models: Array<{ id: string; name: string; provider?: string; isCurrent?: boolean }> }) {
+export function ModelSelector({ models, disabled }: { models: Array<{ id: string; name: string; provider?: string; isCurrent?: boolean }>; disabled?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -21,16 +21,21 @@ export function ModelSelector({ models }: { models: Array<{ id: string; name: st
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const switchModel = useCallback(async (modelId: string) => {
+  const switchModel = useCallback(async (modelId: string, provider?: string) => {
     try {
       await hanaFetch('/api/models/set', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modelId }),
+        body: JSON.stringify({ modelId, provider }),
       });
-      const res = await hanaFetch('/api/models/favorites');
+      const { currentSessionPath, pendingNewSession } = useStore.getState();
+      if (currentSessionPath && !pendingNewSession) {
+        const { createNewSession } = await import('../../stores/session-actions');
+        await createNewSession();
+      }
+      const res = await hanaFetch('/api/models');
       const data = await res.json();
-      useStore.setState({ models: data.models || [] });
+      useStore.setState({ models: data.models || [], currentModel: data.current ?? null });
     } catch (err) {
       console.error('[model] switch failed:', err);
     }
@@ -45,8 +50,8 @@ export function ModelSelector({ models }: { models: Array<{ id: string; name: st
       if (!groups[key]) groups[key] = [];
       groups[key].push(m);
     }
-    // 当前模型不在 favorites 时强制加入
-    if (current && !models.find(m => m.id === current.id)) {
+    // 当前模型不在列表中时强制加入
+    if (current && !models.find(m => m.id === current.id && m.provider === current.provider)) {
       const key = current.provider || '';
       if (!groups[key]) groups[key] = [];
       groups[key].unshift(current);
@@ -59,7 +64,7 @@ export function ModelSelector({ models }: { models: Array<{ id: string; name: st
 
   return (
     <div className={`${styles['model-selector']}${open ? ` ${styles.open}` : ''}`} ref={ref}>
-      <button className={styles['model-pill']} onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>
+      <button className={`${styles['model-pill']}${disabled ? ` ${styles['model-pill-disabled']}` : ''}`} onClick={(e) => { e.stopPropagation(); if (!disabled) setOpen(!open); }}>
         <span>{current?.name || t('model.unknown') || '...'}</span>
         <span className={styles['model-arrow']}>▾</span>
       </button>
@@ -74,9 +79,9 @@ export function ModelSelector({ models }: { models: Array<{ id: string; name: st
                 )}
                 {items.map(m => (
                   <button
-                    key={m.id}
+                    key={`${m.provider}/${m.id}`}
                     className={`${styles['model-option']}${m.isCurrent ? ` ${styles.active}` : ''}`}
-                    onClick={() => switchModel(m.id)}
+                    onClick={() => switchModel(m.id, m.provider)}
                   >
                     {m.name}
                   </button>

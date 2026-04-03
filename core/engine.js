@@ -277,6 +277,11 @@ export class HanaEngine {
   saveAgentOrder(o) { return this._configCoord.saveAgentOrder(o); }
   async syncModelsAndRefresh(f) { return this._configCoord.syncModelsAndRefresh(f); }
   async setModel(id) { return this._configCoord.setModel(id); }
+  setPendingModel(id, provider) {
+    const model = this.availableModels.find(m => m.id === id && (provider ? m.provider === provider : true));
+    if (!model) throw new Error(t("error.modelNotFound", { id }));
+    this._sessionCoord.setPendingModel(model);
+  }
   getThinkingLevel() { return this._configCoord.getThinkingLevel(); }
   setThinkingLevel(l) { return this._configCoord.setThinkingLevel(l); }
   getSandbox() { return this._prefs.getSandbox(); }

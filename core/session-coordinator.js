@@ -61,6 +61,7 @@ export class SessionCoordinator {
     this._sessions = new Map();
     this._headlessRefCount = 0;
     this._titlesCache = new Map(); // sessionDir → { titles, ts }
+    this._pendingModel = null;
   }
 
   static _TITLES_TTL = 60_000; // 60 秒
@@ -75,14 +76,16 @@ export class SessionCoordinator {
 
   // ── Session 创建 / 切换 ──
 
-  async createSession(sessionMgr, cwd, memoryEnabled = true) {
+  async createSession(sessionMgr, cwd, memoryEnabled = true, model = null) {
     const t0 = Date.now();
     const effectiveCwd = cwd || this._d.getHomeCwd() || process.cwd();
     const agent = this._d.getAgent();
     const models = this._d.getModels();
+    const effectiveModel = model || this._pendingModel || models.currentModel;
+    this._pendingModel = null;
     log.log(`createSession cwd=${effectiveCwd} (传入: ${cwd || "未指定"})`);
 
-    if (!models.currentModel) {
+    if (!effectiveModel) {
       throw new Error(t("error.noAvailableModel"));
     }
 
@@ -96,21 +99,21 @@ export class SessionCoordinator {
     creatingAgent.setMemoryEnabled(memoryEnabled);
 
     const { tools: sessionTools, customTools: sessionCustomTools } = this._d.buildTools(effectiveCwd, null, { workspace: this._d.getHomeCwd() });
-    log.log(`createSession:before-createAgentSession cwd=${effectiveCwd} model=${models.currentModel?.provider || "-"}\/${models.currentModel?.id || "-"} thinking=${models.resolveThinkingLevel(this._d.getPrefs().getThinkingLevel())}`);
+    log.log(`createSession:before-createAgentSession cwd=${effectiveCwd} model=${effectiveModel?.provider || "-"}\/${effectiveModel?.id || "-"} thinking=${models.resolveThinkingLevel(this._d.getPrefs().getThinkingLevel())}`);
     const { session } = await createAgentSession({
       cwd: effectiveCwd,
       sessionManager: sessionMgr,
-      settingsManager: this._createSettings(models.currentModel),
+      settingsManager: this._createSettings(effectiveModel),
       authStorage: models.authStorage,
       modelRegistry: models.modelRegistry,
-      model: models.currentModel,
+      model: effectiveModel,
       thinkingLevel: models.resolveThinkingLevel(this._d.getPrefs().getThinkingLevel()),
       resourceLoader: this._d.getResourceLoader(),
       tools: sessionTools,
       customTools: sessionCustomTools,
     });
     const elapsed = Date.now() - t0;
-    log.log(`session created (${elapsed}ms), model=${models.currentModel?.name || "?"}`);
+    log.log(`session created (${elapsed}ms), model=${effectiveModel?.name || "?"}`);
     this._session = session;
     this._sessionStarted = false;
 
@@ -148,7 +151,12 @@ export class SessionCoordinator {
     return session;
   }
 
+  setPendingModel(model) {
+    this._pendingModel = model || null;
+  }
+
   async switchSession(sessionPath) {
+    this._pendingModel = null;
     const targetAgentId = this._d.agentIdFromSessionPath(sessionPath);
     if (targetAgentId && targetAgentId !== this._d.getActiveAgentId()) {
       // Phase 1: 跨 agent 切换只切指针，不清旧 session
