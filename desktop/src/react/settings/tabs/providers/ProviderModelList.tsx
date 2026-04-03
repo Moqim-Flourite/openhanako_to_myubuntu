@@ -31,10 +31,6 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
       if (mid === pendingDefaultModel) {
         nextDefault = [...next][0] || '';
         const partial: Record<string, unknown> = { models: { chat: nextDefault } };
-        if (nextDefault) {
-          const prov = resolveProviderForModel(nextDefault);
-          if (prov) partial.api = { provider: prov };
-        }
         autoSaveConfig(partial, { refreshModels: true });
       }
       useSettingsStore.setState({ pendingFavorites: next, pendingDefaultModel: nextDefault });
@@ -45,7 +41,6 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
       if (wasEmpty) {
         (updates as Record<string, unknown>).pendingDefaultModel = mid;
         const partial: Record<string, unknown> = { models: { chat: mid } };
-        (partial as Record<string, unknown>).api = { provider: providerId };
         autoSaveConfig(partial, { refreshModels: true });
       }
       useSettingsStore.setState(updates as Partial<ReturnType<typeof useSettingsStore.getState>>);
