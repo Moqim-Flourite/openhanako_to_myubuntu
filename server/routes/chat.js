@@ -155,6 +155,7 @@ export default async function chatRoute(app, { engine, hub }) {
     if (event.type === "message_update") {
       if (!ss) return;
       const sub = event.assistantMessageEvent?.type;
+      debugLog()?.log("ws", `[chat/event] type=message_update sub=${sub || "-"} session=${sessionPath || "-"} active=${isActive} hasOutput=${!!ss.hasOutput} hasToolCall=${!!ss.hasToolCall}`);
 
       if (sub === "text_delta") {
         ss.hasOutput = true;
@@ -230,6 +231,7 @@ export default async function chatRoute(app, { engine, hub }) {
       }
     } else if (event.type === "tool_execution_start") {
       if (!ss) return;
+      debugLog()?.log("ws", `[chat/event] type=tool_execution_start session=${sessionPath || "-"} tool=${event.toolName || "-"} active=${isActive}`);
       ss.hasToolCall = true;
       if (ss.isThinking) {
         ss.isThinking = false;
@@ -372,6 +374,7 @@ export default async function chatRoute(app, { engine, hub }) {
       broadcast({ type: "dm_new_message", from: event.from, to: event.to });
     } else if (event.type === "turn_end") {
       if (!ss) return;
+      debugLog()?.log("ws", `[chat/event] type=turn_end session=${sessionPath || "-"} active=${isActive} hasOutput=${!!ss.hasOutput} hasToolCall=${!!ss.hasToolCall} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
       // 关闭结构化 thinking（如有）——必须在 flush 之前，否则前端收不到 thinking_end
       if (ss.isThinking) {
         ss.isThinking = false;
@@ -636,16 +639,21 @@ export default async function chatRoute(app, { engine, hub }) {
         }
         const ss = getState(promptSessionPath);
         try {
+          debugLog()?.log("ws", `[chat/prompt-flow] stage=prepare session=${promptSessionPath || "-"} hasState=${!!ss} textLength=${promptText.length} imageCount=${msg.images?.length || 0}`);
           ss.thinkTagParser.reset();
           ss.moodParser.reset();
           ss.xingParser.reset();
           ss.titleRequested = false;
           ss.titlePreview = "";
           beginSessionStream(ss);
+          debugLog()?.log("ws", `[chat/prompt-flow] stage=begin-stream session=${promptSessionPath || "-"} streamId=${ss.streamId || "-"} nextSeq=${ss.nextSeq || "-"}`);
           broadcast({ type: "status", isStreaming: true, sessionPath: promptSessionPath });
+          debugLog()?.log("ws", `[chat/prompt-flow] stage=before-hub-send session=${promptSessionPath || "-"} currentEngineSession=${engine.currentSessionPath || "-"} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
           await hub.send(promptText, msg.images ? { images: msg.images, sessionPath: promptSessionPath } : { sessionPath: promptSessionPath });
+          debugLog()?.log("ws", `[chat/prompt-flow] stage=after-hub-send session=${promptSessionPath || "-"} currentEngineSession=${engine.currentSessionPath || "-"} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
           broadcast({ type: "status", isStreaming: false, sessionPath: promptSessionPath });
         } catch (err) {
+          debugLog()?.error("ws", `[chat/prompt-flow] stage=send-error session=${promptSessionPath || "-"} error=${err?.stack || err?.message || String(err)}`);
           if (!err.message?.includes("aborted")) {
             wsSend(ws, { type: "error", message: err.message });
           }

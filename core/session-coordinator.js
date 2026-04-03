@@ -96,6 +96,7 @@ export class SessionCoordinator {
     creatingAgent.setMemoryEnabled(memoryEnabled);
 
     const { tools: sessionTools, customTools: sessionCustomTools } = this._d.buildTools(effectiveCwd, null, { workspace: this._d.getHomeCwd() });
+    log.log(`createSession:before-createAgentSession cwd=${effectiveCwd} model=${models.currentModel?.provider || "-"}\/${models.currentModel?.id || "-"} thinking=${models.resolveThinkingLevel(this._d.getPrefs().getThinkingLevel())}`);
     const { session } = await createAgentSession({
       cwd: effectiveCwd,
       sessionManager: sessionMgr,
@@ -202,12 +203,14 @@ export class SessionCoordinator {
     if (!this._session) throw new Error(t("error.noActiveSessionPrompt"));
     this._sessionStarted = true;
     const sp = this._session.sessionManager?.getSessionFile?.();
+    log.log(`prompt:start session=${sp || "-"} textLength=${text?.length || 0} imageCount=${opts?.images?.length || 0} model=${this._session?.model?.provider || "-"}\/${this._session?.model?.id || "-"} streaming=${!!this._session?.isStreaming}`);
     if (sp) {
       const entry = this._sessions.get(sp);
       if (entry) entry.lastTouchedAt = Date.now();
     }
     const promptOpts = opts?.images?.length ? { images: opts.images } : undefined;
     await this._session.prompt(text, promptOpts);
+    log.log(`prompt:done session=${sp || "-"} model=${this._session?.model?.provider || "-"}\/${this._session?.model?.id || "-"}`);
     if (sp) {
       const entry = this._sessions.get(sp);
       const agent = entry ? this._d.getAgentById(entry.agentId) : this._d.getAgent();
@@ -237,10 +240,12 @@ export class SessionCoordinator {
   async promptSession(sessionPath, text, opts) {
     const entry = this._sessions.get(sessionPath);
     if (!entry) throw new Error(t("error.sessionNotInCache", { path: sessionPath }));
+    log.log(`promptSession:start requestedSession=${sessionPath} textLength=${text?.length || 0} imageCount=${opts?.images?.length || 0} sessionModel=${entry.session?.model?.provider || "-"}\/${entry.session?.model?.id || "-"} currentFocus=${this.currentSessionPath || "-"}`);
     entry.lastTouchedAt = Date.now();
     if (sessionPath === this.currentSessionPath) this._sessionStarted = true;
     const promptOpts = opts?.images?.length ? { images: opts.images } : undefined;
     await entry.session.prompt(text, promptOpts);
+    log.log(`promptSession:done requestedSession=${sessionPath} sessionModel=${entry.session?.model?.provider || "-"}\/${entry.session?.model?.id || "-"}`);
     const agent = this._d.getAgentById(entry.agentId) || this._d.getAgent();
     agent?._memoryTicker?.notifyTurn(sessionPath);
   }
