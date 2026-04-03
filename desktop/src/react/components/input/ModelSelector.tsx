@@ -23,6 +23,7 @@ export function ModelSelector({ models, disabled }: { models: Array<{ id: string
 
   const switchModel = useCallback(async (modelId: string, provider?: string) => {
     try {
+      console.log('[model] switch:start', { modelId, provider });
       await hanaFetch('/api/models/set', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -35,7 +36,28 @@ export function ModelSelector({ models, disabled }: { models: Array<{ id: string
       }
       const res = await hanaFetch('/api/models/favorites');
       const data = await res.json();
-      useStore.setState({ models: data.models || [], currentModel: data.current ?? null });
+      const nextModels = data.models || [];
+      const nextCurrentId = data.current ?? null;
+      const nextCurrentProvider = data.currentProvider ?? null;
+      useStore.setState({ models: nextModels, currentModel: nextCurrentId });
+
+      const switched = nextCurrentId === modelId && (provider === undefined || provider === null || provider === '' || nextCurrentProvider === provider);
+      console.log('[model] switch:result', {
+        requestedModelId: modelId,
+        requestedProvider: provider || '',
+        nextCurrentId,
+        nextCurrentProvider,
+        switched,
+      });
+
+      if (!switched) {
+        console.error('[model] switch not applied', {
+          requestedModelId: modelId,
+          requestedProvider: provider || '',
+          nextCurrentId,
+          nextCurrentProvider,
+        });
+      }
     } catch (err) {
       console.error('[model] switch failed:', err);
     }
