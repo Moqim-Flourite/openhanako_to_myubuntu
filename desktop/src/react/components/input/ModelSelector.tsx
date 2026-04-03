@@ -33,7 +33,7 @@ export function ModelSelector({ models, disabled }: { models: Array<{ id: string
         const { createNewSession } = await import('../../stores/session-actions');
         await createNewSession();
       }
-      const res = await hanaFetch('/api/models');
+      const res = await hanaFetch('/api/models/favorites');
       const data = await res.json();
       useStore.setState({ models: data.models || [], currentModel: data.current ?? null });
     } catch (err) {
