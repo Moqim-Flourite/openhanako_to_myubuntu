@@ -198,8 +198,19 @@ export default async function configRoute(app, { engine }) {
             // 从 favorites 中移除已删 provider 的模型
           if (orphanedModels.size > 0) {
             const favorites = engine.readFavorites();
-            const cleaned = favorites.filter(id => !orphanedModels.has(id));
+            const deletedProviderPrefixes = new Set(deletedProviders.map(name => `${name}/`));
+            const cleaned = favorites.filter(id => {
+              if (orphanedModels.has(id)) return false;
+              for (const prefix of deletedProviderPrefixes) {
+                if (id.startsWith(prefix)) return false;
+              }
+              return true;
+            });
             if (cleaned.length !== favorites.length) {
+              logApiConfig("put:favorites-cleared", {
+                removedCount: favorites.length - cleaned.length,
+                removed: favorites.filter(id => !cleaned.includes(id)),
+              });
               await engine.saveFavorites(cleaned);
             }
 

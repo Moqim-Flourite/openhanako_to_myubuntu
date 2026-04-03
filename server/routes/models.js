@@ -40,9 +40,11 @@ export default async function modelsRoute(app, { engine }) {
     try {
       const favorites = engine.readFavorites();
       const available = engine.availableModels;
+      const availableIds = new Set(available.map(m => m.id));
+      const validFavorites = favorites.filter(id => availableIds.has(id));
 
       const overrides = engine.config?.models?.overrides;
-      const result = favorites.map(id => {
+      const result = validFavorites.map(id => {
         const m = available.find(am => am.id === id);
         return {
           id,
@@ -54,10 +56,14 @@ export default async function modelsRoute(app, { engine }) {
         };
       });
 
+      if (validFavorites.length !== favorites.length) {
+        debugLog()?.warn("api", `[models/favorites] filtered invalid favorites removed=${favorites.length - validFavorites.length}`);
+      }
+
       return {
         models: result,
         current: engine.currentModel?.id || null,
-        hasFavorites: favorites.length > 0,
+        hasFavorites: validFavorites.length > 0,
       };
     } catch (err) {
       reply.code(500);
@@ -138,6 +144,7 @@ export default async function modelsRoute(app, { engine }) {
   app.post("/api/models/set", async (req, reply) => {
     try {
       const { modelId } = req.body || {};
+      debugLog()?.log("api", `[models/set] start requested=${modelId || "-"}`);
       if (!modelId) {
         reply.code(400);
         return { error: t("error.missingParam", { param: "modelId" }) };
@@ -146,6 +153,7 @@ export default async function modelsRoute(app, { engine }) {
       const available = engine.availableModels || [];
       const exists = available.some((m) => m.id === modelId || `${m.provider}/${m.id}` === modelId);
       if (!exists) {
+        debugLog()?.warn("api", `[models/set] unavailable requested=${modelId} availableCount=${available.length}`);
         reply.code(400);
         return {
           error: `model not available: ${modelId}`,
@@ -155,9 +163,10 @@ export default async function modelsRoute(app, { engine }) {
       }
 
       await engine.setModel(modelId);
-      debugLog()?.log("api", `[models/set] requested=${modelId} current=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
+      debugLog()?.log("api", `[models/set] success requested=${modelId} current=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
       return { ok: true, model: engine.currentModel?.name };
     } catch (err) {
+      debugLog()?.error("api", `[models/set] failed: ${err?.stack || err?.message || String(err)}`);
       reply.code(500);
       return { error: err.message };
     }
