@@ -126,22 +126,13 @@ export function ProviderModelList({ providerId, summary, onRefresh }: {
   useEffect(() => {
     if (!dropdownOpen || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const viewportPadding = 8;
-    const w = Math.min(rect.width + 80, window.innerWidth - viewportPadding * 2);
-    const left = Math.min(rect.left, window.innerWidth - w - viewportPadding);
-    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
-    const spaceAbove = rect.top - viewportPadding;
-    const openAbove = spaceBelow < 260 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(220, Math.min(420, openAbove ? spaceAbove - 4 : spaceBelow - 4));
-
+    const w = rect.width + 80;
+    const left = Math.min(rect.left, window.innerWidth - w - 8);
     setPanelStyle({
       position: 'fixed',
-      left: Math.max(viewportPadding, left),
+      left: Math.max(8, left),
       width: w,
-      maxHeight,
-      ...(openAbove
-        ? { bottom: window.innerHeight - rect.top + 4 }
-        : { top: rect.bottom + 4 }),
+      bottom: window.innerHeight - rect.top + 4,
       zIndex: 9999,
     });
   }, [dropdownOpen]);

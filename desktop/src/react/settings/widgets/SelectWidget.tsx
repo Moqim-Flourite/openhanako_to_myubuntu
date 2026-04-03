@@ -31,18 +31,14 @@ export function SelectWidget({ options, value, onChange, placeholder }: SelectWi
   useEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const viewportPadding = 8;
-    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
-    const spaceAbove = rect.top - viewportPadding;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
     const openAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(160, Math.min(320, openAbove ? spaceAbove - 2 : spaceBelow - 2));
 
     setPanelStyle({
       position: 'fixed',
-      left: Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - rect.width - viewportPadding)),
-      width: Math.min(rect.width, window.innerWidth - viewportPadding * 2),
-      maxHeight,
-      overflowY: 'auto',
+      left: rect.left,
+      width: rect.width,
       ...(openAbove
         ? { bottom: window.innerHeight - rect.top + 2 }
         : { top: rect.bottom + 2 }),

@@ -3092,22 +3092,12 @@ a.about-link:hover {
 .pv-model-dropdown-trigger:hover { border-color: var(--accent); }
 
 .pv-model-dropdown-panel {
-    /* position/left/top|bottom/width/maxHeight/zIndex set by JS */
+    /* position/left/bottom/width/zIndex set by JS */
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: 0 4px 16px var(--shadow);
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.pv-model-dropdown-list {
-    flex: 1;
-    min-height: 0;
-    max-height: 240px;
-    overflow-y: auto;
-    padding: 4px 0;
 }
 
 .pv-model-dropdown-search {
@@ -3122,6 +3112,11 @@ a.about-link:hover {
     outline: none;
 }
 
+.pv-model-dropdown-list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
 
 .pv-model-dropdown-option {
     display: flex;
@@ -4236,8 +4231,6 @@ a.about-link:hover {
     top: auto;
     left: auto;
     margin-top: 0;
-    max-height: min(320px, calc(100vh - 16px));
-    overflow-y: auto;
 }
 
 .sdw-option {
