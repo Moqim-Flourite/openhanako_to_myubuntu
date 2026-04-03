@@ -142,6 +142,18 @@ export default async function modelsRoute(app, { engine }) {
         reply.code(400);
         return { error: t("error.missingParam", { param: "modelId" }) };
       }
+
+      const available = engine.availableModels || [];
+      const exists = available.some((m) => m.id === modelId || `${m.provider}/${m.id}` === modelId);
+      if (!exists) {
+        reply.code(400);
+        return {
+          error: `model not available: ${modelId}`,
+          code: "MODEL_NOT_AVAILABLE",
+          availableCount: available.length,
+        };
+      }
+
       await engine.setModel(modelId);
       return { ok: true, model: engine.currentModel?.name };
     } catch (err) {

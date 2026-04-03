@@ -196,13 +196,25 @@ export default async function configRoute(app, { engine }) {
               writeFileSync(modelsJsonPath, JSON.stringify(modelsJson, null, 4) + "\n", "utf-8");
             }
             // 从 favorites 中移除已删 provider 的模型
-            if (orphanedModels.size > 0) {
-              const favorites = engine.readFavorites();
-              const cleaned = favorites.filter(id => !orphanedModels.has(id));
-              if (cleaned.length !== favorites.length) {
-                await engine.saveFavorites(cleaned);
+          if (orphanedModels.size > 0) {
+            const favorites = engine.readFavorites();
+            const cleaned = favorites.filter(id => !orphanedModels.has(id));
+            if (cleaned.length !== favorites.length) {
+              await engine.saveFavorites(cleaned);
+            }
+
+            const sharedModels = engine.getSharedModels?.() || {};
+            const sharedPatch = {};
+            for (const [role, ref] of Object.entries(sharedModels)) {
+              if (ref && orphanedModels.has(ref)) {
+                sharedPatch[role] = null;
               }
             }
+            if (Object.keys(sharedPatch).length > 0) {
+              logApiConfig("put:shared-models-cleared", { sharedPatch });
+              engine.setSharedModels(sharedPatch);
+            }
+          }
           } catch {}
         }
         saveGlobalProviders({ providers: partial.providers });
