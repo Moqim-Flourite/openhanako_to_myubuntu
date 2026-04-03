@@ -24,54 +24,12 @@ export function showError(message: string): void {
 
 export async function loadModels(): Promise<void> {
   try {
-    window.__hanaLog?.('info', 'renderer-models', 'loadModels:start');
     const res = await hanaFetch('/api/models/favorites');
     const data = await res.json();
-    const models = Array.isArray(data.models) ? data.models : [];
-    console.log('[renderer/models] loadModels:favorites-success', {
-      modelCount: models.length,
-      current: data.current ?? null,
-      ids: models.map((m: any) => m?.id).filter(Boolean),
-    });
-    window.__hanaLog?.(
-      'info',
-      'renderer-models',
-      `loadModels:favorites-success count=${models.length} current=${data.current || '-'} ids=${models.map((m: any) => m?.id).filter(Boolean).join(',')}`,
-    );
-
-    if (models.length > 0) {
-      useStore.setState({
-        models,
-        currentModel: data.current,
-      });
-      return;
-    }
-
-    window.__hanaLog?.('warn', 'renderer-models', 'loadModels:favorites-empty fallback=/api/models');
-    const fallbackRes = await hanaFetch('/api/models');
-    const fallbackData = await fallbackRes.json();
-    const fallbackModels = Array.isArray(fallbackData.models) ? fallbackData.models : [];
-    console.log('[renderer/models] loadModels:fallback-success', {
-      modelCount: fallbackModels.length,
-      current: fallbackData.current ?? null,
-      ids: fallbackModels.map((m: any) => m?.id).filter(Boolean),
-    });
-    window.__hanaLog?.(
-      'info',
-      'renderer-models',
-      `loadModels:fallback-success count=${fallbackModels.length} current=${fallbackData.current || '-'} ids=${fallbackModels.map((m: any) => m?.id).filter(Boolean).join(',')}`,
-    );
     useStore.setState({
-      models: fallbackModels,
-      currentModel: fallbackData.current ?? null,
+      models: data.models || [],
+      currentModel: data.current,
     });
-  } catch (err: any) {
-    console.error('[renderer/models] loadModels:error', err);
-    window.__hanaLog?.('error', 'renderer-models', `loadModels:error ${err?.stack || err?.message || String(err)}`);
-    useStore.setState({
-      models: [],
-      currentModel: null,
-    });
-  }
+  } catch { /* silent */ }
 }
 

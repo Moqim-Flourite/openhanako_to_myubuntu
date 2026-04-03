@@ -28,10 +28,8 @@ export default async function modelsRoute(app, { engine }) {
         provider: m.provider,
         isCurrent: m.id === engine.currentModel?.id,
       }));
-      debugLog()?.log("api", `[models] list count=${models.length} current=${engine.currentModel?.id || "-"} ids=${models.map(m => m.id).join(",")}`);
       return { models, current: engine.currentModel?.id || null };
     } catch (err) {
-      debugLog()?.error("api", `[models] list failed: ${err?.stack || err?.message || String(err)}`);
       reply.code(500);
       return { error: err.message };
     }
@@ -40,39 +38,28 @@ export default async function modelsRoute(app, { engine }) {
   // 收藏模型列表（给聊天页面用，直接读 favorites，和设置页同源）
   app.get("/api/models/favorites", async (req, reply) => {
     try {
-      const favoritesRaw = engine.readFavorites();
-      const favorites = Array.isArray(favoritesRaw) ? favoritesRaw.filter(id => typeof id === "string" && id.trim()) : [];
-      const availableRaw = engine.availableModels;
-      const available = Array.isArray(availableRaw) ? availableRaw : [];
-      const availableIds = new Set(available.map(m => m?.id).filter(Boolean));
-      const validFavorites = favorites.filter(id => availableIds.has(id));
-
-      debugLog()?.log("api", `[models/favorites] raw favoritesRawType=${Array.isArray(favoritesRaw) ? "array" : typeof favoritesRaw} favorites=${favorites.join(",")} availableCount=${available.length} availableIds=${[...availableIds].join(",")} validFavorites=${validFavorites.join(",")} current=${engine.currentModel?.id || "-"}`);
+      const favorites = engine.readFavorites();
+      const available = engine.availableModels;
 
       const overrides = engine.config?.models?.overrides;
-      const result = validFavorites.map(id => {
-        const m = available.find(am => am?.id === id);
+      const result = favorites.map(id => {
+        const m = available.find(am => am.id === id);
         return {
           id,
           name: resolveModelName(id, m?.name, overrides),
           provider: m?.provider || "",
           isCurrent: id === engine.currentModel?.id,
-          reasoning: !!m?.reasoning,
+          reasoning: m ? !!m.reasoning : false,
           xhigh: m ? supportsXhigh(m) : false,
         };
       });
 
-      if (validFavorites.length !== favorites.length) {
-        debugLog()?.warn("api", `[models/favorites] filtered invalid favorites removed=${favorites.length - validFavorites.length}`);
-      }
-
       return {
         models: result,
         current: engine.currentModel?.id || null,
-        hasFavorites: result.length > 0,
+        hasFavorites: favorites.length > 0,
       };
     } catch (err) {
-      debugLog()?.error("api", `[models/favorites] failed: ${err?.stack || err?.message || String(err)}`);
       reply.code(500);
       return { error: err.message };
     }
@@ -151,29 +138,13 @@ export default async function modelsRoute(app, { engine }) {
   app.post("/api/models/set", async (req, reply) => {
     try {
       const { modelId } = req.body || {};
-      debugLog()?.log("api", `[models/set] start requested=${modelId || "-"}`);
       if (!modelId) {
         reply.code(400);
         return { error: t("error.missingParam", { param: "modelId" }) };
       }
-
-      const available = engine.availableModels || [];
-      const exists = available.some((m) => m.id === modelId || `${m.provider}/${m.id}` === modelId);
-      if (!exists) {
-        debugLog()?.warn("api", `[models/set] unavailable requested=${modelId} availableCount=${available.length}`);
-        reply.code(400);
-        return {
-          error: `model not available: ${modelId}`,
-          code: "MODEL_NOT_AVAILABLE",
-          availableCount: available.length,
-        };
-      }
-
       await engine.setModel(modelId);
-      debugLog()?.log("api", `[models/set] success requested=${modelId} current=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
       return { ok: true, model: engine.currentModel?.name };
     } catch (err) {
-      debugLog()?.error("api", `[models/set] failed: ${err?.stack || err?.message || String(err)}`);
       reply.code(500);
       return { error: err.message };
     }
