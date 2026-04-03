@@ -71,6 +71,8 @@ export async function loadSessions(): Promise<void> {
 
 export async function switchSession(path: string): Promise<void> {
   const s = useStore.getState();
+  console.log('[renderer/session] switch:start', { requestedPath: path, currentSessionPath: s.currentSessionPath });
+  window.__hanaLog?.('info', 'renderer-session', `switch:start requested=${path} current=${s.currentSessionPath || '-'}`);
   if (path === s.currentSessionPath) return;
 
   // 关闭浮动面板
@@ -199,6 +201,14 @@ export async function createNewSession(): Promise<void> {
 
 export async function ensureSession(): Promise<boolean> {
   const s = useStore.getState();
+  console.log('[renderer/session] ensure:start', {
+    pendingNewSession: s.pendingNewSession,
+    selectedFolder: s.selectedFolder,
+    selectedAgentId: s.selectedAgentId,
+    currentAgentId: s.currentAgentId,
+    memoryEnabled: s.memoryEnabled,
+  });
+  window.__hanaLog?.('info', 'renderer-session', `ensure:start pending=${s.pendingNewSession} selectedFolder=${s.selectedFolder || '-'} selectedAgent=${s.selectedAgentId || '-'} currentAgent=${s.currentAgentId || '-'} memory=${s.memoryEnabled}`);
   if (!s.pendingNewSession) return true;
 
   try {

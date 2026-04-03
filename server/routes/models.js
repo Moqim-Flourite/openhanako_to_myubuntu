@@ -28,8 +28,10 @@ export default async function modelsRoute(app, { engine }) {
         provider: m.provider,
         isCurrent: m.id === engine.currentModel?.id,
       }));
+      debugLog()?.log("api", `[models] list count=${models.length} current=${engine.currentModel?.id || "-"} ids=${models.map(m => m.id).join(",")}`);
       return { models, current: engine.currentModel?.id || null };
     } catch (err) {
+      debugLog()?.error("api", `[models] list failed: ${err?.stack || err?.message || String(err)}`);
       reply.code(500);
       return { error: err.message };
     }
@@ -44,6 +46,8 @@ export default async function modelsRoute(app, { engine }) {
       const available = Array.isArray(availableRaw) ? availableRaw : [];
       const availableIds = new Set(available.map(m => m?.id).filter(Boolean));
       const validFavorites = favorites.filter(id => availableIds.has(id));
+
+      debugLog()?.log("api", `[models/favorites] raw favoritesRawType=${Array.isArray(favoritesRaw) ? "array" : typeof favoritesRaw} favorites=${favorites.join(",")} availableCount=${available.length} availableIds=${[...availableIds].join(",")} validFavorites=${validFavorites.join(",")} current=${engine.currentModel?.id || "-"}`);
 
       const overrides = engine.config?.models?.overrides;
       const result = validFavorites.map(id => {

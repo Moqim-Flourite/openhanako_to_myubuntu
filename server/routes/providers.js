@@ -423,8 +423,14 @@ export default async function providersRoute(app, { engine }) {
       return { error: "api is required" };
     }
 
-    const probeModel = String(model || "").trim()
+    const requestedModel = String(model || "").trim();
+    const probeModel = requestedModel
       || (api === "anthropic-messages" ? "claude-3-5-haiku-20241022" : "glm-5");
+    debugProviderRoute("provider-test:probe-model", {
+      requestedModel,
+      fallbackReason: requestedModel ? "explicit" : (api === "anthropic-messages" ? "anthropic-default" : "openai-default"),
+      probeModel,
+    });
 
     try {
       const endpoint = buildApiEndpoint(base_url, api);
