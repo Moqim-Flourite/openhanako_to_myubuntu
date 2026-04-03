@@ -313,6 +313,9 @@ export class Agent {
         return cfg;
       },
       resolveUtilityConfig: () => this._engine?.resolveUtilityConfig?.(),
+      getConfirmStore: () => this._engine?.confirmStore,
+      getSessionPath: () => this._engine?._sessionCoord?.currentSessionPath,
+      emitEvent: (event) => this._engine?._emitEvent(event, this._engine?._sessionCoord?.currentSessionPath),
       onInstalled: async (skillName) => {
         await this._onInstallCallback?.(skillName);
       },
