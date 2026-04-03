@@ -32,6 +32,30 @@ function extractText(content) {
     .join("");
 }
 
+function extractAssistantTextFromEvent(event) {
+  if (!event || typeof event !== "object") return "";
+  const candidates = [
+    event.content,
+    event.message?.content,
+    event.assistantMessage?.content,
+    event.data?.content,
+  ];
+  for (const content of candidates) {
+    const text = extractText(content).trim();
+    if (text) return text;
+  }
+  const directTextCandidates = [
+    event.text,
+    event.message?.text,
+    event.assistantMessage?.text,
+    event.data?.text,
+  ];
+  for (const text of directTextCandidates) {
+    if (typeof text === "string" && text.trim()) return text.trim();
+  }
+  return "";
+}
+
 export default async function chatRoute(app, { engine, hub }) {
   let activeWsClients = 0;
   let disconnectAbortTimer = null;
@@ -230,6 +254,65 @@ export default async function chatRoute(app, { engine, hub }) {
         // 不在这里关闭 thinking 状态
       } else if (sub === "error") {
         if (isActive) broadcast({ type: "error", message: event.assistantMessageEvent.error || "Unknown error" });
+      }
+    } else if (event.type === "message_end") {
+      if (!ss) return;
+      const fullText = extractAssistantTextFromEvent(event);
+      debugLog()?.log("ws", `[chat/event] type=message_end session=${sessionPath || "-"} active=${isActive} textLength=${fullText.length} hasOutput=${!!ss.hasOutput}`);
+      if (fullText) {
+        ss.hasOutput = true;
+        if (ss.isThinking) {
+          ss.isThinking = false;
+          emitStreamEvent(sessionPath, ss, { type: "thinking_end" });
+        }
+        ss.thinkTagParser.feed(fullText, (tEvt) => {
+          switch (tEvt.type) {
+            case "think_start":
+              emitStreamEvent(sessionPath, ss, { type: "thinking_start" });
+              break;
+            case "think_text":
+              emitStreamEvent(sessionPath, ss, { type: "thinking_delta", delta: tEvt.data });
+              break;
+            case "think_end":
+              emitStreamEvent(sessionPath, ss, { type: "thinking_end" });
+              break;
+            case "text":
+              ss.moodParser.feed(tEvt.data, (evt) => {
+                switch (evt.type) {
+                  case "text":
+                    ss.xingParser.feed(evt.data, (xEvt) => {
+                      switch (xEvt.type) {
+                        case "text":
+                          ss.titlePreview += xEvt.data || "";
+                          emitStreamEvent(sessionPath, ss, { type: "text_delta", delta: xEvt.data });
+                          maybeGenerateFirstTurnTitle(sessionPath, ss);
+                          break;
+                        case "xing_start":
+                          emitStreamEvent(sessionPath, ss, { type: "xing_start", title: xEvt.title });
+                          break;
+                        case "xing_text":
+                          emitStreamEvent(sessionPath, ss, { type: "xing_text", delta: xEvt.data });
+                          break;
+                        case "xing_end":
+                          emitStreamEvent(sessionPath, ss, { type: "xing_end" });
+                          break;
+                      }
+                    });
+                    break;
+                  case "mood_start":
+                    emitStreamEvent(sessionPath, ss, { type: "mood_start" });
+                    break;
+                  case "mood_text":
+                    emitStreamEvent(sessionPath, ss, { type: "mood_text", delta: evt.data });
+                    break;
+                  case "mood_end":
+                    emitStreamEvent(sessionPath, ss, { type: "mood_end" });
+                    break;
+                }
+              });
+              break;
+          }
+        });
       }
     } else if (event.type === "tool_execution_start") {
       if (!ss) return;
