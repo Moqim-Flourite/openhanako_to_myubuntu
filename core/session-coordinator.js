@@ -122,6 +122,10 @@ export class SessionCoordinator {
     const unsub = session.subscribe((event) => {
       log.log(`session-subscribe:event session=${sessionPath || "-"} type=${event?.type || "-"} sub=${event?.assistantMessageEvent?.type || "-"} tool=${event?.toolName || "-"}`);
       this._d.emitEvent(event, sessionPath);
+      try {
+        const hub = this._d.getHub?.();
+        hub?.eventBus?.emit?.(event, sessionPath);
+      } catch {}
     });
 
     // 存入 map（SessionEntry）
