@@ -300,37 +300,65 @@ export class ConfigCoordinator {
     // agent 负责：写磁盘、刷新身份、刷新模块、重建 prompt
     agent.updateConfig(partial);
 
+    const resolveChatModel = (requestedModelId, providerHint = "") => {
+      const requested = String(requestedModelId || "");
+      const bareModelId = requested.includes("/")
+        ? requested.slice(requested.indexOf("/") + 1)
+        : requested;
+      const scopedProvider = requested.includes("/")
+        ? requested.slice(0, requested.indexOf("/"))
+        : providerHint;
+
+      let newModel = models.availableModels.find(m => m.id === requested);
+      if (!newModel && bareModelId) {
+        newModel = models.availableModels.find(m => m.id === bareModelId && (!scopedProvider || m.provider === scopedProvider));
+      }
+      if (!newModel && bareModelId) {
+        newModel = models.availableModels.find(m => m.id === bareModelId);
+      }
+      return newModel || null;
+    };
+
+    const applyResolvedChatModel = async (newModel, reason = "resolved") => {
+      if (!newModel) return false;
+      models.defaultModel = newModel;
+      models.currentModel = newModel;
+      log.log(`default model switched to: ${newModel.name || newModel.id} (${reason})`);
+      const session = this._d.getSession();
+      if (session) {
+        await session.setModel(newModel);
+        session.setThinkingLevel(
+          models.resolveThinkingLevel(this.getThinkingLevel())
+        );
+      }
+      return true;
+    };
+
     // 切换聊天模型：不需要 sync，模型早已注册
     if (partial.models?.chat) {
       const requestedModelId = String(partial.models.chat || "");
-      const bareModelId = requestedModelId.includes("/")
-        ? requestedModelId.slice(requestedModelId.indexOf("/") + 1)
-        : requestedModelId;
-      const scopedProvider = requestedModelId.includes("/")
-        ? requestedModelId.slice(0, requestedModelId.indexOf("/"))
-        : (partial.api?.provider || agent.config?.api?.provider || "");
-
-      let newModel = models.availableModels.find(m => m.id === requestedModelId);
-      if (!newModel) {
-        newModel = models.availableModels.find(m => m.id === bareModelId && (!scopedProvider || m.provider === scopedProvider));
-      }
-      if (!newModel) {
-        newModel = models.availableModels.find(m => m.id === bareModelId);
-      }
+      const providerHint = partial.api?.provider || agent.config?.api?.provider || "";
+      const newModel = resolveChatModel(requestedModelId, providerHint);
 
       if (newModel) {
-        models.defaultModel = newModel;
-        models.currentModel = newModel;
-        log.log(`default model switched to: ${newModel.name || newModel.id}`);
-        const session = this._d.getSession();
-        if (session) {
-          await session.setModel(newModel);
-          session.setThinkingLevel(
-            models.resolveThinkingLevel(this.getThinkingLevel())
-          );
-        }
+        await applyResolvedChatModel(newModel, "explicit-chat-model");
       } else {
         log.warn(`requested chat model not found in available models: ${requestedModelId}`);
+      }
+    } else if (partial.api) {
+      const providerHint = partial.api?.provider || agent.config?.api?.provider || "";
+      const currentChatModelId = String(agent.config?.models?.chat || "");
+      const currentChatModel = resolveChatModel(currentChatModelId, providerHint);
+      const providerModels = models.availableModels.filter(m => !providerHint || m.provider === providerHint);
+      const fallbackModel = currentChatModel || providerModels[0] || null;
+
+      if (providerHint && fallbackModel) {
+        if (!agent.config.models) agent.config.models = {};
+        if (!currentChatModelId || !currentChatModel || currentChatModel.provider !== providerHint) {
+          agent.config.models.chat = `${fallbackModel.provider}/${fallbackModel.id}`;
+          log.log(`api change auto-selected chat model: ${agent.config.models.chat}`);
+        }
+        await applyResolvedChatModel(fallbackModel, "api-change-fallback");
       }
     }
 
