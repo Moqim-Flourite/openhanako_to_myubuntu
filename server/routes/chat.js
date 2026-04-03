@@ -77,7 +77,6 @@ function extractLastAssistantTextFromSession(session) {
 }
 
 export default async function chatRoute(app, { engine, hub }) {
-  debugLog()?.log("ws", `[chat/route-init] currentSession=${engine.currentSessionPath || "-"} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
   let activeWsClients = 0;
   let disconnectAbortTimer = null;
   const DISCONNECT_ABORT_GRACE_MS = 15_000;
@@ -562,7 +561,7 @@ export default async function chatRoute(app, { engine, hub }) {
     activeWsClients++;
     clients.add(ws);
     cancelDisconnectAbort();
-    debugLog()?.log("ws", `[chat/ws-client-open] clients=${clients.size} activeWsClients=${activeWsClients} currentSession=${engine.currentSessionPath || "-"} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
+    debugLog()?.log("ws", "client connected");
 
     // 注意：token 校验由 server/index.js 的 onRequest hook 统一处理，
     // Fastify @fastify/websocket 的 WS 升级请求也会经过该 hook
@@ -570,7 +569,6 @@ export default async function chatRoute(app, { engine, hub }) {
     // 处理客户端消息
     ws.on("message", async (raw) => {
       const msg = wsParse(raw);
-      debugLog()?.log("ws", `[chat/ws-recv] parsed=${msg ? "yes" : "no"} rawType=${typeof raw} msgType=${msg?.type || "-"} currentSession=${engine.currentSessionPath || "-"} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
       if (!msg) return;
 
       if (msg.type === "abort") {
