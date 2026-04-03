@@ -85,6 +85,63 @@ openhanako_to_myubuntu/
 
 ---
 
+## 🆕 最近更新
+
+### 工具治理与子代理能力增强（2026-04）
+
+本轮更新开始将 Hanako 的工具系统往更接近 Claude Code 的治理方式推进，重点不是增加单个工具数量，而是补齐“工具元信息 → 权限策略 → 确认流程 → 前端可视化”这一整层运行时能力。
+
+#### 已完成内容
+
+- **新增统一 Tool Meta 层**
+  - 为工具补充 `category`、`readOnly`、`destructive`、`concurrencySafe`、`requiresConfirmation`、`tags` 等元信息
+  - 已接入 `web_search`、`todo`、`browser`、`delegate` 等代表性工具
+  - `Agent.tools` 聚合时会自动补全默认 meta
+
+- **新增 Tool Policy（工具权限模式）**
+  - 支持三种策略模式：
+    - `full`：完全权限
+    - `safe`：安全模式（过滤高风险 custom tools）
+    - `read-only`：只读模式
+  - 已接入 `engine.buildTools()`、隔离执行、Bridge 执行链、sub-agent 委派链
+
+- **Browser 高风险动作确认**
+  - `browser.navigate`
+  - `browser.evaluate`
+  - 在执行前会触发阻塞确认，等待用户批准/拒绝
+
+- **新增通用工具确认链路**
+  - 服务端支持 `tool_confirmation`
+  - 前端支持工具确认卡片
+  - 用户可直接在聊天界面确认或拒绝高风险工具动作
+
+- **Delegate（子代理）支持三层模式**
+  - `read-only`：只读子代理
+  - `safe`：安全子代理
+  - `full`：完全权限子代理
+  - 前端工具卡片已支持中文显示：
+    - `子代理·只读`
+    - `子代理·安全`
+    - `子代理·完全`
+
+- **前端工具治理可视化**
+  - 工具标签改为中文展示，例如：
+    - `搜索`
+    - `浏览器`
+    - `记忆`
+    - `设置`
+    - `只读`
+    - `需确认`
+    - `高风险`
+
+#### 当前意义
+
+这部分改造的目标，是把 Hanako 从“有一组工具的 Agent”逐步推进成“具备工具权限治理、风险控制、确认流程和前端可解释性的 Agent Runtime”。
+
+后续会继续把更多高风险工具（如设置修改、技能安装、未来可能的写文件/执行命令能力）纳入统一策略层。
+
+---
+
 ## 🔧 主要修改
 
 ### 1. package.json - 添加 Linux 构建配置
