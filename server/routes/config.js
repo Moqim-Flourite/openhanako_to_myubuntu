@@ -9,6 +9,19 @@ import { debugLog } from "../../lib/debug-log.js";
 import { getRawConfig, getAllProviders, saveGlobalProviders, clearConfigCache } from "../../lib/memory/config-loader.js";
 import { FactStore } from "../../lib/memory/fact-store.js";
 
+function maskKeyForLog(key) {
+  const v = String(key || "").trim();
+  if (!v) return { masked: "", len: 0 };
+  if (v.length <= 10) return { masked: `${v.slice(0, 2)}...${v.slice(-2)}`, len: v.length };
+  return { masked: `${v.slice(0, 6)}...${v.slice(-4)}`, len: v.length };
+}
+
+function logApiConfig(event, payload = {}) {
+  try {
+    console.log("[api-config/server]", event, payload);
+  } catch {}
+}
+
 export default async function configRoute(app, { engine }) {
 
   // 读取配置（脱敏：隐藏 API key，附带 _raw 原始结构 + providers）
@@ -89,6 +102,21 @@ export default async function configRoute(app, { engine }) {
         reply.code(400);
         return { error: t("error.invalidJson") };
       }
+
+      logApiConfig("put:start", {
+        keys: Object.keys(partial || {}),
+        providers: partial?.providers
+          ? Object.fromEntries(Object.entries(partial.providers).map(([name, value]) => [
+              name,
+              value === null
+                ? null
+                : {
+                    ...(value || {}),
+                    api_key: maskKeyForLog(value?.api_key),
+                  },
+            ]))
+          : undefined,
+      });
       // ── 全局设置拦截：存 preferences / providers.yaml 而非 agent config ──
 
       // thinking_level → preference（跨 agent 共享）
@@ -138,9 +166,15 @@ export default async function configRoute(app, { engine }) {
       // providers 块 → 全局 providers.yaml
       let providersChanged = false;
       if (partial.providers) {
-        // 删除 provider 时（值为 null），同步清理 models.json + favorites
-        const deletedProviders = Object.keys(partial.providers)
-          .filter(name => partial.providers[name] === null);
+      logApiConfig("put:providers-merge", {
+        providerNames: Object.keys(partial.providers),
+      });
+      // 删除 provider 时（值为 null），同步清理 models.json + favorites
+      const deletedProviders = Object.keys(partial.providers)
+      .filter(name => partial.providers[name] === null);
+      if (deletedProviders.length > 0) {
+        logApiConfig("put:providers-delete", { deletedProviders });
+      }
         if (deletedProviders.length > 0) {
           try {
             const modelsJsonPath = engine.modelsJsonPath;
@@ -201,32 +235,46 @@ export default async function configRoute(app, { engine }) {
       // providers 变更后确保运行时刷新
       const needsModelSync = providersChanged && !partial.models;
       if (providersChanged && Object.keys(partial).length === 0) {
-        clearConfigCache();
-        await engine.updateConfig({});
-        if (needsModelSync) {
-          try { await engine.syncModelsAndRefresh(); } catch (e) {
+      logApiConfig("put:providers-only-refresh", {
+        providersChanged,
+        needsModelSync,
+      });
+      clearConfigCache();
+      await engine.updateConfig({});
+      if (needsModelSync) {
+        try { await engine.syncModelsAndRefresh(); } catch (e) {
             debugLog()?.warn("api", `syncModelsAndRefresh after provider change: ${e.message}`);
           }
         }
         return { ok: true };
       }
 
-      if (Object.keys(partial).length === 0) return { ok: true };
-      debugLog()?.log("api", `PUT /api/config keys=[${Object.keys(partial).join(",")}]`);
-      if (providersChanged) clearConfigCache();
-      await engine.updateConfig(partial);
-      if (needsModelSync) {
-        try { await engine.syncModelsAndRefresh(); } catch (e) {
+      if (Object.keys(partial).length === 0) {
+      logApiConfig("put:done", { mode: "providers-only" });
+      return { ok: true };
+    }
+    debugLog()?.log("api", `PUT /api/config keys=[${Object.keys(partial).join(",")}]`);
+    if (providersChanged) clearConfigCache();
+    await engine.updateConfig(partial);
+    if (needsModelSync) {
+      logApiConfig("put:sync-models", { providersChanged, needsModelSync });
+      try { await engine.syncModelsAndRefresh(); } catch (e) {
           debugLog()?.warn("api", `syncModelsAndRefresh after config update: ${e.message}`);
         }
       }
-      return { ok: true };
-    } catch (err) {
-      debugLog()?.error("api", `PUT /api/config failed: ${err.message}`);
-      reply.code(500);
-      return { error: err.message };
-    }
-  });
+      logApiConfig("put:done", {
+      mode: "partial-update",
+      providersChanged,
+      remainingKeys: Object.keys(partial),
+    });
+    return { ok: true };
+  } catch (err) {
+    logApiConfig("put:error", { error: err.message });
+    debugLog()?.error("api", `PUT /api/config failed: ${err.message}`);
+    reply.code(500);
+    return { error: err.message };
+  }
+});
 
   // ── System Prompt（只读，供 DevTools 查看）──
 

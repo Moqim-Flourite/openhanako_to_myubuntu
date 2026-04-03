@@ -48,14 +48,22 @@ function ProviderDeleteButton({ providerId, onRefresh }: { providerId: string; o
   const { showToast } = useSettingsStore();
   const [confirming, setConfirming] = useState(false);
 
+  const logDelete = (event: string, payload: Record<string, unknown> = {}) => {
+    try {
+      console.log('[api-config/delete]', event, { providerId, ...payload });
+    } catch {}
+  };
+
   const handleDelete = async () => {
     try {
+      logDelete('start');
       const res = await hanaFetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ providers: { [providerId]: null } }),
       });
       const data = await res.json();
+      logDelete('response', { ok: !data.error, error: data.error || '' });
       if (data.error) throw new Error(data.error);
       showToast(t('settings.providers.deleted', { name: providerId }), 'success');
       useSettingsStore.setState({ selectedProviderId: null });

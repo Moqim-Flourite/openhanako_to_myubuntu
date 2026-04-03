@@ -8,6 +8,20 @@ import styles from '../../Settings.module.css';
 
 const platform = window.platform;
 
+function maskKeyForLog(key: string) {
+  if (!key) return { masked: '', len: 0 };
+  const trimmed = String(key).trim();
+  if (!trimmed) return { masked: '', len: 0 };
+  if (trimmed.length <= 10) return { masked: `${trimmed.slice(0, 2)}...${trimmed.slice(-2)}`, len: trimmed.length };
+  return { masked: `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`, len: trimmed.length };
+}
+
+function logApiConfigUi(event: string, payload: Record<string, unknown> = {}) {
+  try {
+    console.log('[api-config/ui]', event, payload);
+  } catch {}
+}
+
 export function ApiKeyCredentials({ providerId, summary, providerConfig, isPresetSetup, presetInfo, onRefresh }: {
   providerId: string;
   summary: ProviderSummary;
@@ -26,11 +40,17 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
 
   useEffect(() => {
     if (!keyEdited) {
+      logApiConfigUi('summary-sync', {
+        providerId,
+        hasMaskedKey: !!summary.api_key_masked,
+        maskedKey: summary.api_key_masked || '',
+        keyEdited,
+      });
       setKeyVal('');
       setHasStoredKey(!!summary.api_key_masked);
       setShowMaskedValue(true);
     }
-  }, [summary.api_key_masked, keyEdited]);
+  }, [providerId, summary.api_key_masked, keyEdited]);
 
   const effectiveApiKey = keyEdited ? keyVal.trim() : '';
   const shouldUseStoredKey = !keyEdited && hasStoredKey;
@@ -42,12 +62,28 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
     if (!key && !presetInfo?.local) return;
     btn.classList.add(styles['spinning']);
     try {
+      logApiConfigUi('verify-and-save:start', {
+        providerId,
+        isPresetSetup: !!isPresetSetup,
+        baseUrl,
+        api,
+        keyEdited,
+        hasStoredKey,
+        shouldUseStoredKey,
+        displayValue,
+        key: maskKeyForLog(key),
+      });
       const testRes = await hanaFetch('/api/providers/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: providerId, base_url: baseUrl, api, api_key: key }),
       });
       const testData = await testRes.json();
+      logApiConfigUi('verify-and-save:test-result', {
+        providerId,
+        ok: !!testData.ok,
+        error: testData.error || '',
+      });
       if (!testData.ok) {
         showToast(t('settings.providers.verifyFailed'), 'error');
         return;
@@ -55,6 +91,13 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
       const payload = isPresetSetup
         ? { base_url: baseUrl, api_key: key, api, models: [] as string[] }
         : { api_key: key };
+      logApiConfigUi('verify-and-save:save-payload', {
+        providerId,
+        payload: {
+          ...payload,
+          api_key: maskKeyForLog(String(payload.api_key || '')),
+        },
+      });
       await hanaFetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -112,11 +155,25 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
             value={keyVal}
             displayValue={displayValue}
             onFocus={() => {
+              logApiConfigUi('input-focus', {
+                providerId,
+                keyEdited,
+                hasStoredKey,
+                showMaskedValue,
+                displayValue,
+              });
               if (!keyEdited && hasStoredKey) {
                 setShowMaskedValue(false);
               }
             }}
             onChange={(v) => {
+              logApiConfigUi('input-change', {
+                providerId,
+                incomingValue: maskKeyForLog(v),
+                keyEditedBefore: keyEdited,
+                hasStoredKeyBefore: hasStoredKey,
+                displayValueBefore: displayValue,
+              });
               if (!keyEdited) {
                 setKeyEdited(true);
                 setShowMaskedValue(false);
