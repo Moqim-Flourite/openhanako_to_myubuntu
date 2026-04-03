@@ -162,9 +162,6 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
                 showMaskedValue,
                 displayValue,
               });
-              if (!keyEdited && hasStoredKey) {
-                setShowMaskedValue(false);
-              }
             }}
             onChange={(v) => {
               logApiConfigUi('input-change', {
@@ -177,7 +174,10 @@ export function ApiKeyCredentials({ providerId, summary, providerConfig, isPrese
               if (!keyEdited) {
                 setKeyEdited(true);
                 setShowMaskedValue(false);
-                setKeyVal('');
+                setHasStoredKey(false);
+                setConnStatus('idle');
+                setKeyVal(v);
+                return;
               }
               setKeyVal(v);
               setHasStoredKey(false);

@@ -66,7 +66,10 @@ function ProviderDeleteButton({ providerId, onRefresh }: { providerId: string; o
       logDelete('response', { ok: !data.error, error: data.error || '' });
       if (data.error) throw new Error(data.error);
       showToast(t('settings.providers.deleted', { name: providerId }), 'success');
-      useSettingsStore.setState({ selectedProviderId: null });
+      useSettingsStore.setState({
+        selectedProviderId: null,
+        providersSummary: {},
+      });
       setConfirming(false);
       await onRefresh();
       platform?.settingsChanged?.('models-changed');
