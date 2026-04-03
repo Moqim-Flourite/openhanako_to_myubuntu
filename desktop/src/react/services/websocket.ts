@@ -44,9 +44,13 @@ export function connectWebSocket(port?: string, token?: string): void {
 
   const tokenParam = serverToken ? `?token=${serverToken}` : '';
   const url = `ws://127.0.0.1:${serverPort}/ws${tokenParam}`;
+  console.log('[renderer/ws] connect:start', { serverPort, hasServerToken: !!serverToken, url });
+  window.__hanaLog?.('info', 'renderer-ws', `connect:start port=${serverPort || '-'} hasToken=${!!serverToken}`);
   _ws = new WebSocket(url);
 
   _ws.onopen = () => {
+    console.log('[renderer/ws] open', { url });
+    window.__hanaLog?.('info', 'renderer-ws', `open url=${url}`);
     _wsRetryDelay = 1000;
     setStatus('status.connected', true);
 
@@ -74,10 +78,15 @@ export function connectWebSocket(port?: string, token?: string): void {
   };
 
   _ws.onclose = () => {
+    console.warn('[renderer/ws] close', { url, retryDelay: _wsRetryDelay });
+    window.__hanaLog?.('warn', 'renderer-ws', `close url=${url} retryDelay=${_wsRetryDelay}`);
     setStatus('status.disconnected', false);
     _wsRetryTimer = setTimeout(() => connectWebSocket(serverPort, serverToken ?? undefined), _wsRetryDelay);
     _wsRetryDelay = Math.min(_wsRetryDelay * 2, WS_RETRY_MAX);
   };
 
-  _ws.onerror = () => {};
+  _ws.onerror = () => {
+    console.error('[renderer/ws] error', { url });
+    window.__hanaLog?.('error', 'renderer-ws', `error url=${url}`);
+  };
 }

@@ -448,6 +448,7 @@ export default async function chatRoute(app, { engine, hub }) {
 
       // 空回复检测：本轮没有文本输出也没有工具调用，提示用户检查配置
       if (!ss.hasOutput && !ss.hasToolCall && isActive) {
+        debugLog()?.warn("ws", `[chat/empty-response] session=${sessionPath || "-"} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"} agent=${engine.agentName || "-"}`);
         broadcast({ type: "error", message: t("error.modelNoResponse") });
       }
 
@@ -628,6 +629,7 @@ export default async function chatRoute(app, { engine, hub }) {
         debugLog()?.log("ws", `user message (${promptText.length} chars, ${msg.images?.length || 0} images)`);
         // Phase 2: 客户端可指定 sessionPath，否则用焦点 session
         const promptSessionPath = msg.sessionPath || engine.currentSessionPath;
+        debugLog()?.log("ws", `[chat/prompt] session=${promptSessionPath || "-"} currentModel=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"} agent=${engine.agentName || "-"}`);
         if (engine.isSessionStreaming(promptSessionPath)) {
           wsSend(ws, { type: "error", message: t("error.stillStreaming", { name: engine.agentName }) });
           return;

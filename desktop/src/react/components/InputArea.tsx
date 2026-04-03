@@ -312,8 +312,17 @@ function InputAreaInner() {
       clearAttachedFiles();
 
       const ws = getWebSocket();
-      const wsMsg: Record<string, unknown> = { type: 'prompt', text: finalText, sessionPath: useStore.getState().currentSessionPath };
+      const currentSessionPathForSend = useStore.getState().currentSessionPath;
+      const wsMsg: Record<string, unknown> = { type: 'prompt', text: finalText, sessionPath: currentSessionPathForSend };
       if (images.length > 0) wsMsg.images = images;
+      console.log('[renderer/prompt] send', {
+        sessionPath: currentSessionPathForSend,
+        textLength: finalText.length,
+        imageCount: images.length,
+        wsReadyState: ws?.readyState,
+        currentModel: useStore.getState().models.find(m => m.isCurrent)?.id || null,
+      });
+      window.__hanaLog?.('info', 'renderer-prompt', `send session=${currentSessionPathForSend || '-'} len=${finalText.length} images=${images.length} ws=${ws?.readyState ?? ''} model=${useStore.getState().models.find(m => m.isCurrent)?.id || '-'}`);
       ws?.send(JSON.stringify(wsMsg));
     } finally {
       setSending(false);

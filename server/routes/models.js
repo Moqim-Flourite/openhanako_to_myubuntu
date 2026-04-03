@@ -155,6 +155,7 @@ export default async function modelsRoute(app, { engine }) {
       }
 
       await engine.setModel(modelId);
+      debugLog()?.log("api", `[models/set] requested=${modelId} current=${engine.currentModel?.provider || "-"}\/${engine.currentModel?.id || "-"}`);
       return { ok: true, model: engine.currentModel?.name };
     } catch (err) {
       reply.code(500);

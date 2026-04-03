@@ -82,6 +82,12 @@ async function init(): Promise<void> {
   const serverPort = await platform.getServerPort();
   const serverToken = await platform.getServerToken();
   useStore.setState({ serverPort, serverToken });
+  console.log('[renderer/init] connection', {
+    serverPort,
+    hasServerToken: !!serverToken,
+    tokenPreview: serverToken ? `${serverToken.slice(0, 6)}...${serverToken.slice(-4)}` : '',
+  });
+  window.__hanaLog?.('info', 'renderer-init', `serverPort=${serverPort || '-'} hasToken=${!!serverToken}`);
 
   if (!serverPort) {
     setStatus('status.serverNotReady', false);

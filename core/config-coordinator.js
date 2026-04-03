@@ -210,9 +210,13 @@ export class ConfigCoordinator {
   async setModel(modelId) {
     const models = this._d.getModels();
     const model = models.setModel(modelId);
+    log.log(`setModel:start requested=${modelId} resolved=${model?.provider || "-"}/${model?.id || "-"}`);
     const session = this._d.getSession();
     if (session) {
       await session.setModel(model);
+      log.log(`setModel:session-applied session=${session.sessionManager?.getSessionFile?.() || "-"} model=${model?.provider || "-"}/${model?.id || "-"}`);
+    } else {
+      log.log(`setModel:no-session model=${model?.provider || "-"}/${model?.id || "-"}`);
     }
   }
 
