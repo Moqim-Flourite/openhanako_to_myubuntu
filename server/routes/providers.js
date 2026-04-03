@@ -401,15 +401,39 @@ export default async function providersRoute(app, { engine }) {
    */
 
   app.post("/api/providers/test", async (req, reply) => {
-    const { base_url, api, model } = req.body || {};
-    const api_key = (req.body?.api_key || "").replace(/[^\x20-\x7E]/g, "").trim();
+    const { name, base_url, api, model } = req.body || {};
+    let api_key = (req.body?.api_key || "").replace(/[^\x20-\x7E]/g, "").trim();
+    let apiKeySource = api_key ? "request" : "none";
+
+    if (!api_key && name) {
+      try {
+        const savedProviders = getAllProviders(engine.configPath);
+        const savedKey = savedProviders?.[name]?.api_key || "";
+        if (savedKey) {
+          api_key = String(savedKey).trim();
+          apiKeySource = "saved-provider";
+        }
+      } catch {}
+    }
+
+    if (!api_key && name) {
+      try {
+        const authKey = await engine.authStorage.getApiKey(name);
+        if (authKey) {
+          api_key = String(authKey).trim();
+          apiKeySource = "auth-storage";
+        }
+      } catch {}
+    }
 
     debugProviderRoute("provider-test:start", {
+      name,
       base_url,
       api,
       model,
       hasApiKey: !!api_key,
       apiKeyMasked: maskKey(api_key),
+      apiKeySource,
     });
 
     if (!base_url) {
