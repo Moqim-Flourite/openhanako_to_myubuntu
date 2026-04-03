@@ -26,9 +26,13 @@ export default async function modelsRoute(app, { engine }) {
         id: m.id,
         name: resolveModelName(m.id, m.name, overrides),
         provider: m.provider,
-        isCurrent: m.id === engine.currentModel?.id,
+        isCurrent: m.id === engine.currentModel?.id && m.provider === engine.currentModel?.provider,
       }));
-      return { models, current: engine.currentModel?.id || null };
+      return {
+        models,
+        current: engine.currentModel?.id || null,
+        currentProvider: engine.currentModel?.provider || null,
+      };
     } catch (err) {
       reply.code(500);
       return { error: err.message };
@@ -43,12 +47,12 @@ export default async function modelsRoute(app, { engine }) {
 
       const overrides = engine.config?.models?.overrides;
       const result = favorites.map(id => {
-        const m = available.find(am => am.id === id);
+        const m = available.find(am => am.id === id || `${am.provider}/${am.id}` === id);
         return {
           id,
-          name: resolveModelName(id, m?.name, overrides),
-          provider: m?.provider || "",
-          isCurrent: id === engine.currentModel?.id,
+          name: resolveModelName(m?.id || id, m?.name, overrides),
+          provider: m?.provider || (String(id).includes("/") ? String(id).split("/")[0] : ""),
+          isCurrent: (m?.id || id) === engine.currentModel?.id && (m?.provider || "") === (engine.currentModel?.provider || ""),
           reasoning: m ? !!m.reasoning : false,
           xhigh: m ? supportsXhigh(m) : false,
         };
@@ -57,6 +61,7 @@ export default async function modelsRoute(app, { engine }) {
       return {
         models: result,
         current: engine.currentModel?.id || null,
+        currentProvider: engine.currentModel?.provider || null,
         hasFavorites: favorites.length > 0,
       };
     } catch (err) {

@@ -424,12 +424,37 @@ export default async function providersRoute(app, { engine }) {
     }
 
     const requestedModel = String(model || "").trim();
-    const probeModel = requestedModel
-      || (api === "anthropic-messages" ? "claude-3-5-haiku-20241022" : "glm-5");
+    const lowerBaseUrl = String(base_url || "").toLowerCase();
+    const lowerApi = String(api || "").toLowerCase();
+
+    let fallbackReason = "requested";
+    let probeModel = requestedModel;
+
+    if (!probeModel) {
+      if (api === "anthropic-messages") {
+        probeModel = "claude-3-5-haiku-20241022";
+        fallbackReason = "anthropic-default";
+      } else if (lowerBaseUrl.includes("deepseek")) {
+        probeModel = "deepseek-chat";
+        fallbackReason = "deepseek-default";
+      } else if (lowerBaseUrl.includes("openrouter")) {
+        probeModel = "openai/gpt-4o-mini";
+        fallbackReason = "openrouter-default";
+      } else if (lowerApi.includes("openai")) {
+        probeModel = "gpt-4o-mini";
+        fallbackReason = "openai-compatible-default";
+      } else {
+        probeModel = "gpt-4o-mini";
+        fallbackReason = "generic-default";
+      }
+    }
+
     debugProviderRoute("provider-test:probe-model", {
       requestedModel,
-      fallbackReason: requestedModel ? "explicit" : (api === "anthropic-messages" ? "anthropic-default" : "openai-default"),
+      fallbackReason,
       probeModel,
+      base_url,
+      api,
     });
 
     try {
