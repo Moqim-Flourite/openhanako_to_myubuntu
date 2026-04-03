@@ -38,20 +38,22 @@ export default async function modelsRoute(app, { engine }) {
   // 收藏模型列表（给聊天页面用，直接读 favorites，和设置页同源）
   app.get("/api/models/favorites", async (req, reply) => {
     try {
-      const favorites = engine.readFavorites();
-      const available = engine.availableModels;
-      const availableIds = new Set(available.map(m => m.id));
+      const favoritesRaw = engine.readFavorites();
+      const favorites = Array.isArray(favoritesRaw) ? favoritesRaw.filter(id => typeof id === "string" && id.trim()) : [];
+      const availableRaw = engine.availableModels;
+      const available = Array.isArray(availableRaw) ? availableRaw : [];
+      const availableIds = new Set(available.map(m => m?.id).filter(Boolean));
       const validFavorites = favorites.filter(id => availableIds.has(id));
 
       const overrides = engine.config?.models?.overrides;
       const result = validFavorites.map(id => {
-        const m = available.find(am => am.id === id);
+        const m = available.find(am => am?.id === id);
         return {
           id,
           name: resolveModelName(id, m?.name, overrides),
           provider: m?.provider || "",
           isCurrent: id === engine.currentModel?.id,
-          reasoning: m ? !!m.reasoning : false,
+          reasoning: !!m?.reasoning,
           xhigh: m ? supportsXhigh(m) : false,
         };
       });
@@ -63,9 +65,10 @@ export default async function modelsRoute(app, { engine }) {
       return {
         models: result,
         current: engine.currentModel?.id || null,
-        hasFavorites: validFavorites.length > 0,
+        hasFavorites: result.length > 0,
       };
     } catch (err) {
+      debugLog()?.error("api", `[models/favorites] failed: ${err?.stack || err?.message || String(err)}`);
       reply.code(500);
       return { error: err.message };
     }
