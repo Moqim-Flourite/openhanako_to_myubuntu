@@ -32,6 +32,7 @@ import { createDelegateTool } from "../lib/tools/delegate-tool.js";
 import { READ_ONLY_BUILTIN_TOOLS } from "./config-coordinator.js";
 import { formatSkillsForPrompt } from "@mariozechner/pi-coding-agent";
 import { runCompatChecks } from "../lib/compat/index.js";
+import { attachToolMetaBatch, inferBuiltInToolMeta } from "../lib/tools/tool-meta.js";
 
 export class Agent {
   /**
@@ -242,7 +243,11 @@ export class Agent {
     });
     this._presentFilesTool = createPresentFilesTool();
     this._artifactTool = createArtifactTool();
-    this._browserTool = createBrowserTool();
+    this._browserTool = createBrowserTool({
+      getConfirmStore: () => this._engine?.confirmStore,
+      getSessionPath: () => this._engine?._sessionCoord?.currentSessionPath,
+      emitEvent: (event) => this._engine?._emitEvent(event, this._engine?._sessionCoord?.currentSessionPath),
+    });
     this._notifyTool = createNotifyTool({
       onNotify: (title, body) => this._notifyHandler?.(title, body),
     });
@@ -386,7 +391,7 @@ export class Agent {
       ...this._pinnedMemoryTools,
       ...this._experienceTools,
     ] : [];
-    return [
+    const tools = [
       ...memTools,
       this._webSearchTool,
       this._webFetchTool,
@@ -403,6 +408,8 @@ export class Agent {
       this._updateSettingsTool,
       this._delegateTool,
     ].filter(Boolean);
+
+    return attachToolMetaBatch(tools, inferBuiltInToolMeta);
   }
 
   // Desk 系统访问

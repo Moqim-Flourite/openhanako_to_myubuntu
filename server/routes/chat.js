@@ -242,7 +242,12 @@ export default async function chatRoute(app, { engine, hub }) {
         args = {};
         for (const k of TOOL_ARG_SUMMARY_KEYS) { if (rawArgs[k] !== undefined) args[k] = rawArgs[k]; }
       }
-      emitStreamEvent(sessionPath, ss, { type: "tool_start", name: event.toolName || "", args });
+      emitStreamEvent(sessionPath, ss, {
+        type: "tool_start",
+        name: event.toolName || "",
+        args,
+        meta: event.toolMeta || null,
+      });
     } else if (event.type === "tool_execution_end") {
       if (!ss) return;
       emitStreamEvent(sessionPath, ss, {
@@ -250,6 +255,7 @@ export default async function chatRoute(app, { engine, hub }) {
         name: event.toolName || "",
         success: !event.isError,
         details: event.result?.details,
+        meta: event.toolMeta || null,
       });
 
       if (event.toolName === "present_files") {

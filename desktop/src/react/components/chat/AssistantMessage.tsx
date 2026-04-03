@@ -138,6 +138,8 @@ const ContentBlockView = memo(function ContentBlockView({ block, agentName, yuan
       return <CronConfirmCard confirmId={(block as any).confirmId} jobData={block.jobData} status={block.status} />;
     case 'settings_confirm':
       return <SettingsConfirmCard {...block} />;
+    case 'tool_confirm':
+      return <ToolConfirmCard {...block} />;
     default:
       return null;
   }
@@ -301,6 +303,79 @@ const CronConfirmCard = memo(function CronConfirmCard({ confirmId, jobData, stat
   return (
     <div className={styles.cronConfirmCard}>
       <div className={styles.cronConfirmTitle}>{label}</div>
+      <div className={styles.cronConfirmActions}>
+        <button className={`${styles.cronConfirmBtn} ${styles.cronConfirmBtnApprove}`} onClick={handleApprove}>{window.t('common.approve')}</button>
+        <button className={`${styles.cronConfirmBtn} ${styles.cronConfirmBtnReject}`} onClick={handleReject}>{window.t('common.reject')}</button>
+      </div>
+    </div>
+  );
+});
+
+const ToolConfirmCard = memo(function ToolConfirmCard({
+  confirmId,
+  toolName,
+  action,
+  label,
+  description,
+  payload,
+  status: initialStatus,
+}: {
+  confirmId: string;
+  toolName: string;
+  action?: string | null;
+  label: string;
+  description?: string | null;
+  payload?: Record<string, unknown>;
+  status?: string;
+}) {
+  const [status, setStatus] = useState(initialStatus || 'pending');
+
+  const handleApprove = async () => {
+    try {
+      await hanaFetch(`/api/confirm/${confirmId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirmed' }),
+      });
+      setStatus('confirmed');
+    } catch { /* silent */ }
+  };
+
+  const handleReject = async () => {
+    try {
+      await hanaFetch(`/api/confirm/${confirmId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rejected' }),
+      });
+      setStatus('rejected');
+    } catch { /* silent */ }
+  };
+
+  const payloadText = payload ? JSON.stringify(payload, null, 2) : '';
+
+  if (status !== 'pending') {
+    return (
+      <div className={styles.cronConfirmCard}>
+        <div className={styles.cronConfirmTitle}>{label || `${toolName}${action ? `.${action}` : ''}`}</div>
+        <div className={`${styles.cronConfirmStatus} ${status === 'confirmed' ? styles.cronConfirmStatusApproved : styles.cronConfirmStatusRejected}`}>
+          {status === 'confirmed'
+            ? window.t('common.approved')
+            : status === 'timeout'
+              ? window.t('common.timeout')
+              : window.t('common.rejected')}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.cronConfirmCard}>
+      <div className={styles.cronConfirmTitle}>{label || `${toolName}${action ? `.${action}` : ''}`}</div>
+      {description && <div className={styles.settingsConfirmDesc}>{description}</div>}
+      {payloadText && (
+        <pre className={styles.toolConfirmPayload}>{payloadText}</pre>
+      )}
       <div className={styles.cronConfirmActions}>
         <button className={`${styles.cronConfirmBtn} ${styles.cronConfirmBtnApprove}`} onClick={handleApprove}>{window.t('common.approve')}</button>
         <button className={`${styles.cronConfirmBtn} ${styles.cronConfirmBtnReject}`} onClick={handleReject}>{window.t('common.reject')}</button>

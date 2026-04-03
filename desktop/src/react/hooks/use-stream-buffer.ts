@@ -242,7 +242,7 @@ class StreamBufferManager {
             if (tg.tools.some(t => !t.done)) {
               blocks[lastTg] = {
                 ...tg,
-                tools: [...tg.tools, { name: msg.name, args: msg.args, done: false, success: false }],
+                tools: [...tg.tools, { name: msg.name, args: msg.args, meta: msg.meta || null, done: false, success: false }],
               };
               return { ...m, blocks };
             }
@@ -250,7 +250,7 @@ class StreamBufferManager {
           // 新建 tool_group
           blocks.push({
             type: 'tool_group',
-            tools: [{ name: msg.name, args: msg.args, done: false, success: false }],
+            tools: [{ name: msg.name, args: msg.args, meta: msg.meta || null, done: false, success: false }],
             collapsed: false,
           });
           return { ...m, blocks };
@@ -267,7 +267,13 @@ class StreamBufferManager {
             const toolIdx = tg.tools.findIndex(t => t.name === msg.name && !t.done);
             if (toolIdx >= 0) {
               const tools = [...tg.tools];
-              tools[toolIdx] = { ...tools[toolIdx], done: true, success: !!msg.success };
+              tools[toolIdx] = {
+                ...tools[toolIdx],
+                done: true,
+                success: !!msg.success,
+                details: msg.details,
+                meta: msg.meta ?? tools[toolIdx].meta ?? null,
+              };
               const allDone = tools.every(t => t.done);
               blocks[i] = { ...tg, tools, collapsed: allDone && tools.length > 1 };
               return { ...m, blocks };
@@ -346,6 +352,24 @@ class StreamBufferManager {
             label: msg.label,
             description: msg.description,
             frontend: msg.frontend,
+            status: 'pending' as const,
+          }],
+        }));
+        break;
+
+      case 'tool_confirmation':
+        this.ensureMessage(buf);
+        this.flush(buf);
+        useStore.getState().updateLastMessage(sessionPath, (m) => ({
+          ...m,
+          blocks: [...(m.blocks || []), {
+            type: 'tool_confirm' as const,
+            confirmId: msg.confirmId,
+            toolName: msg.toolName,
+            action: msg.action,
+            label: msg.label,
+            description: msg.description,
+            payload: msg.payload,
             status: 'pending' as const,
           }],
         }));

@@ -331,6 +331,20 @@
 .cronConfirmStatusApproved { color: var(--green); }
 .cronConfirmStatusRejected { color: var(--text-muted); }
 
+.toolConfirmPayload {
+    margin-top: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    max-width: 100%;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.035);
+    color: var(--text-light);
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
 /* ── 设置确认卡片 ── */
 
 .settingsConfirmCard {

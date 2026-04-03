@@ -31,7 +31,7 @@ const REACT_CHAT_EVENTS = new Set([
   'xing_start', 'xing_text', 'xing_end',
   'tool_start', 'tool_end', 'turn_end',
   'file_output', 'skill_activated', 'artifact',
-  'browser_screenshot', 'cron_confirmation', 'settings_confirmation',
+  'browser_screenshot', 'cron_confirmation', 'settings_confirmation', 'tool_confirmation',
   'compaction_start', 'compaction_end',
 ]);
 
@@ -247,8 +247,15 @@ export function handleServerMessage(msg: any): void {
         useStore.getState().updateLastMessage(sp, (m: any) => {
           if (!m.blocks) return m;
           const updated = m.blocks.map((b: any) => {
-            if ((b.type === 'settings_confirm' || b.type === 'cron_confirm') && b.confirmId === msg.confirmId) {
-              return { ...b, status: msg.action === 'confirmed' ? 'confirmed' : 'rejected' };
+            if ((b.type === 'settings_confirm' || b.type === 'cron_confirm' || b.type === 'tool_confirm') && b.confirmId === msg.confirmId) {
+              return {
+                ...b,
+                status: msg.action === 'confirmed'
+                  ? 'confirmed'
+                  : msg.action === 'timeout'
+                    ? 'timeout'
+                    : 'rejected',
+              };
             }
             return b;
           });
