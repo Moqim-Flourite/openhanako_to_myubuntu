@@ -89,6 +89,7 @@ export default async function chatRoute(app, { engine, hub }) {
   const clients = new Set();
 
   function broadcast(msg) {
+    debugLog()?.log("ws", `[chat/broadcast] type=${msg?.type || "-"} session=${msg?.sessionPath || "-"} clientCount=${clients.size}`);
     for (const client of clients) {
       wsSend(client, msg);
     }
@@ -149,6 +150,7 @@ export default async function chatRoute(app, { engine, hub }) {
 
   // 单订阅：事件只写入一次，再按需广播到所有连接中的客户端。
   hub.subscribe((event, sessionPath) => {
+    debugLog()?.log("ws", `[chat/hub-subscribe] type=${event?.type || "-"} sub=${event?.assistantMessageEvent?.type || "-"} session=${sessionPath || "-"} currentSession=${engine.currentSessionPath || "-"} listenerActive=${sessionPath === engine.currentSessionPath}`);
     const isActive = sessionPath === engine.currentSessionPath;
     const ss = sessionPath ? getState(sessionPath) : null;
 

@@ -117,6 +117,7 @@ export class SessionCoordinator {
     // 事件转发
     const sessionPath = session.sessionManager?.getSessionFile?.();
     const unsub = session.subscribe((event) => {
+      log.log(`session-subscribe:event session=${sessionPath || "-"} type=${event?.type || "-"} sub=${event?.assistantMessageEvent?.type || "-"} tool=${event?.toolName || "-"}`);
       this._d.emitEvent(event, sessionPath);
     });
 

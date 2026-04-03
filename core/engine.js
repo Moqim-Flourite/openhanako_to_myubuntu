@@ -571,6 +571,7 @@ export class HanaEngine {
   }
 
   _emitEvent(event, sessionPath) {
+    debugLog()?.log("engine", `[emitEvent] type=${event?.type || "-"} sub=${event?.assistantMessageEvent?.type || "-"} session=${sessionPath || "-"} hasEventBus=${!!this._eventBus} listenerCount=${this._listeners.size}`);
     if (this._eventBus) {
       this._eventBus.emit(event, sessionPath);
     } else {
