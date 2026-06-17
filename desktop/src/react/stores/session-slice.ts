@@ -1,0 +1,184 @@
+import type { Session, SessionCapabilityDrift, SessionPermissionMode, SessionStream, TodoItem } from '../types';
+import type { SessionConfirmationBlock } from './chat-types';
+import type { ThinkingLevel } from './model-slice';
+
+const SESSION_PERMISSION_MODES = new Set(['auto', 'operate', 'ask', 'read_only']);
+
+function normalizeSessionPermissionMode(mode: unknown): SessionPermissionMode {
+  return typeof mode === 'string' && SESSION_PERMISSION_MODES.has(mode)
+    ? mode as SessionPermissionMode
+    : 'ask';
+}
+
+export interface SessionSlice {
+  sessions: Session[];
+  currentSessionPath: string | null;
+  pendingSessionSwitchPath: string | null;
+  sessionStreams: Record<string, SessionStream>;
+  pendingNewSession: boolean;
+  pendingProjectId: string | null;
+  pendingNewSessionThinkingLevel: ThinkingLevel | null;
+  pendingNewSessionPermissionMode: SessionPermissionMode | null;
+  sessionPermissionMode: SessionPermissionMode;
+  memoryEnabled: boolean;
+  /** @deprecated 兼容层 — 读取当前 session 的 todos，新代码用 todosBySession */
+  sessionTodos: TodoItem[];
+  todosBySession: Record<string, TodoItem[]>;
+  sessionAuthorizedFoldersByPath: Record<string, string[]>;
+  /**
+   * 每个 session 的 live todos 版本号。live WS 写入（tool_end）+1，
+   * loadMessages hydrate 捕获版本前后对比：若 mid-flight 被 live 更新，
+   * 就跳过 hydrate 写入，避免旧快照覆盖更晚到达的实时状态。
+   */
+  todosLiveVersionBySession: Record<string, number>;
+  /** #1624：服务端下发的工具能力漂移提示，keyed by sessionPath（null = 无提示） */
+  capabilityDriftBySession: Record<string, SessionCapabilityDrift>;
+  /** #1624：fresh-compact 刷新进行中的 session 集合（跨切换保留 busy 态） */
+  capabilityRefreshingSessions: string[];
+  /** 输入区确认卡片的 live pending 状态，keyed by sessionPath，避免后台 session 事件被焦点过滤丢失。 */
+  pendingSessionConfirmationsByPath: Record<string, SessionConfirmationBlock>;
+  setSessions: (sessions: Session[]) => void;
+  setCurrentSessionPath: (path: string | null) => void;
+  setPendingSessionSwitchPath: (path: string | null) => void;
+  setSessionStream: (sessionPath: string, stream: SessionStream) => void;
+  removeSessionStream: (sessionPath: string) => void;
+  setPendingNewSession: (pending: boolean) => void;
+  setPendingProjectId: (projectId: string | null) => void;
+  setPendingNewSessionThinkingLevel: (level: ThinkingLevel | null) => void;
+  setPendingNewSessionPermissionMode: (mode: SessionPermissionMode | null) => void;
+  setSessionPermissionMode: (mode: SessionPermissionMode) => void;
+  setMemoryEnabled: (enabled: boolean) => void;
+  setSessionTodos: (todos: TodoItem[]) => void;
+  setSessionTodosForPath: (sessionPath: string, todos: TodoItem[]) => void;
+  setSessionAuthorizedFolders: (sessionPath: string, folders: string[]) => void;
+  bumpTodosLiveVersion: (sessionPath: string) => void;
+  setSessionCapabilityDrift: (sessionPath: string, drift: SessionCapabilityDrift | null) => void;
+  setSessionCapabilityRefreshing: (sessionPath: string, refreshing: boolean) => void;
+  setPendingSessionConfirmation: (sessionPath: string, block: SessionConfirmationBlock | null) => void;
+  resolvePendingSessionConfirmation: (confirmId: string) => void;
+}
+
+export const createSessionSlice = (
+  set: (partial: Partial<SessionSlice> | ((s: SessionSlice) => Partial<SessionSlice>)) => void
+): SessionSlice => ({
+  sessions: [],
+  currentSessionPath: null,
+  pendingSessionSwitchPath: null,
+  sessionStreams: {},
+  pendingNewSession: false,
+  pendingProjectId: null,
+  pendingNewSessionThinkingLevel: null,
+  pendingNewSessionPermissionMode: null,
+  sessionPermissionMode: 'ask',
+  memoryEnabled: true,
+  sessionTodos: [],
+  todosBySession: {},
+  sessionAuthorizedFoldersByPath: {},
+  todosLiveVersionBySession: {},
+  capabilityDriftBySession: {},
+  capabilityRefreshingSessions: [],
+  pendingSessionConfirmationsByPath: {},
+  setSessions: (sessions) => set({ sessions }),
+  setCurrentSessionPath: (path) => set({ currentSessionPath: path }),
+  setPendingSessionSwitchPath: (path) => set({ pendingSessionSwitchPath: path }),
+  setSessionStream: (sessionPath, stream) =>
+    set((s) => ({
+      sessionStreams: { ...s.sessionStreams, [sessionPath]: stream },
+    })),
+  removeSessionStream: (sessionPath) =>
+    set((s) => {
+      const { [sessionPath]: _, ...rest } = s.sessionStreams;
+      return { sessionStreams: rest };
+    }),
+  setPendingNewSession: (pending) => set({ pendingNewSession: pending }),
+  setPendingProjectId: (projectId) => set({ pendingProjectId: projectId }),
+  setPendingNewSessionThinkingLevel: (level) => set({ pendingNewSessionThinkingLevel: level }),
+  setPendingNewSessionPermissionMode: (mode) => {
+    if (mode === null) {
+      set({ pendingNewSessionPermissionMode: null });
+      return;
+    }
+    const normalized = normalizeSessionPermissionMode(mode);
+    set({ pendingNewSessionPermissionMode: normalized, sessionPermissionMode: normalized });
+  },
+  setSessionPermissionMode: (mode) => {
+    const normalized = normalizeSessionPermissionMode(mode);
+    set((s) => ({
+      sessionPermissionMode: normalized,
+      ...(s.pendingNewSession ? { pendingNewSessionPermissionMode: normalized } : {}),
+    }));
+  },
+  setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
+  // 兼容：旧调用方仍可用，写入当前 session
+  setSessionTodos: (todos) =>
+    set((s) => {
+      const path = s.currentSessionPath;
+      if (!path) return { sessionTodos: todos };
+      return {
+        sessionTodos: todos,
+        todosBySession: { ...s.todosBySession, [path]: todos },
+      };
+    }),
+  // 新 API：指定 session path
+  setSessionTodosForPath: (sessionPath, todos) =>
+    set((s) => ({
+      todosBySession: { ...s.todosBySession, [sessionPath]: todos },
+      // 如果写入的是当前 session，同步更新兼容字段
+      sessionTodos: s.currentSessionPath === sessionPath ? todos : s.sessionTodos,
+    })),
+  setSessionAuthorizedFolders: (sessionPath, folders) =>
+    set((s) => ({
+      sessionAuthorizedFoldersByPath: {
+        ...s.sessionAuthorizedFoldersByPath,
+        [sessionPath]: Array.isArray(folders) ? folders : [],
+      },
+    })),
+  bumpTodosLiveVersion: (sessionPath) =>
+    set((s) => ({
+      todosLiveVersionBySession: {
+        ...s.todosLiveVersionBySession,
+        [sessionPath]: (s.todosLiveVersionBySession[sessionPath] ?? 0) + 1,
+      },
+    })),
+  setSessionCapabilityDrift: (sessionPath, drift) =>
+    set((s) => {
+      if (drift) {
+        return { capabilityDriftBySession: { ...s.capabilityDriftBySession, [sessionPath]: drift } };
+      }
+      const { [sessionPath]: _, ...rest } = s.capabilityDriftBySession;
+      return { capabilityDriftBySession: rest };
+    }),
+  setSessionCapabilityRefreshing: (sessionPath, refreshing) =>
+    set((s) => ({
+      capabilityRefreshingSessions: refreshing
+        ? (s.capabilityRefreshingSessions.includes(sessionPath)
+          ? s.capabilityRefreshingSessions
+          : [...s.capabilityRefreshingSessions, sessionPath])
+        : s.capabilityRefreshingSessions.filter((p) => p !== sessionPath),
+    })),
+  setPendingSessionConfirmation: (sessionPath, block) =>
+    set((s) => {
+      const path = typeof sessionPath === 'string' ? sessionPath.trim() : '';
+      if (!path) return {};
+      const next = { ...s.pendingSessionConfirmationsByPath };
+      if (block?.status === 'pending') {
+        next[path] = block;
+      } else {
+        delete next[path];
+      }
+      return { pendingSessionConfirmationsByPath: next };
+    }),
+  resolvePendingSessionConfirmation: (confirmId) =>
+    set((s) => {
+      const id = typeof confirmId === 'string' ? confirmId.trim() : '';
+      if (!id) return {};
+      let changed = false;
+      const next = { ...s.pendingSessionConfirmationsByPath };
+      for (const [sessionPath, block] of Object.entries(next)) {
+        if (block.confirmId !== id) continue;
+        delete next[sessionPath];
+        changed = true;
+      }
+      return changed ? { pendingSessionConfirmationsByPath: next } : {};
+    }),
+});
