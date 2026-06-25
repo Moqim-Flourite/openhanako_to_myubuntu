@@ -92,13 +92,15 @@ openhanako_to_myubuntu/
 
 ### 本次更新
 
+- **session-meta 清理优化**：清理旧 session 缓存，1.3MB → 480KB
+- **被纠正自动记录规则**：agent 被纠正时自动 `record_experience`
+- **频道语音输入**：ChannelsPanel 加麦克风 + ASR 链路
+- **桌面端频道工具**：主聊天 session 支持 `channel_read_context` 和 `channel_reply` 工具，可跨频道读取和发送消息
 - **跨 session 署名**：桌面 session 发消息自动加 `[聊天]` 前缀，区分桌面端和手机端身份
 - **日记范围扩展**：`listSessionFiles` 支持递归扫描 phone sessions，日记生成包含频道聊天记录
 - **输入框草稿缓存**：频道输入框按 channelId 持久化草稿，切换频道时自动恢复
 - **频道消息引用**：支持选中频道消息并引用回复，提升对话连贯性
 - **频道滚动位置保持**：切换频道时保持滚动位置，避免频繁跳转
-- **桌面端频道工具**：主聊天 session 支持 `channel_read_context` 和 `channel_reply` 工具，可跨频道读取和发送消息
-- **频道工具身份标记**：通过 `sessionPath` 自动识别 agentId，确保聊天端身份正确标记
 
 ### 下载
 
