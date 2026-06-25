@@ -256,9 +256,9 @@ export class Hub {
             uiContext: o.uiContext,
             displayMessage: o.displayMessage,
             sessionFileRefs: o.sessionFileRefs,
-            // 从 sessionPath 提取当前 agentId，确保聊天端身份正确标记为 [聊天] {agentId}
+            // 使用配置里的 agentName（如 prime），确保聊天端身份正确标记为 [聊天] {agentName}
             extraCustomTools: this.getDesktopChannelTools(
-              o.sessionPath ? (this._engine.agentIdFromSessionPath?.(o.sessionPath) || this._engine.agentName || 'hanako') : (this._engine.agentName || 'hanako')
+              this._engine.agentName || 'hanako'
             ),
           })
           : this._engine.prompt(text, { images: o.images, videos: o.videos, audios: o.audios }),
