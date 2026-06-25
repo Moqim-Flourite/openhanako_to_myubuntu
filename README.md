@@ -88,13 +88,13 @@ openhanako_to_myubuntu/
 
 ## 📦 最新版本
 
-**v0.252.2** - 2026-06-15
+**v0.330.0** - 2026-06-26
 
 ### 本次更新
 
-- **修复 Bridge 文件投递**：修复 `resolveBridgeOwnerChatId` 在 phone session 中读取 bridge index 失败的问题（`bridgeManager.readIndex` → `engine.bridgeSessionManager.readIndex`）
-- **修复 AppImage 启动崩溃**：补全 `hana-server` wrapper 脚本，解决 `MODULE_NOT_FOUND` 错误
-- **stage_files bridgeTarget 支持**：phone session 可通过 `bridgeTarget` 参数向 QQ/飞书/Telegram 发送文件
+- **跨 session 署名**：桌面 session 发消息自动加 `[聊天]` 前缀，区分桌面端和手机端身份
+- **日记范围扩展**：`listSessionFiles` 支持递归扫描 phone sessions，日记生成包含频道聊天记录
+- **输入框草稿缓存**：频道输入框按 channelId 持久化草稿，切换频道时自动恢复
 
 ### 下载
 
