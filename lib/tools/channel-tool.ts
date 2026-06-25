@@ -211,7 +211,7 @@ export function createChannelTool({
       })),
     }),
 
-    execute: async (_toolCallId, params, runtimeCtx) => {
+    execute: async (_toolCallId, params, _signal, _onUpdate, runtimeCtx) => {
       if (isEnabled && !isEnabled()) {
         return {
           content: [{ type: "text", text: t("error.channelsDisabled") }],
