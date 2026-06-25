@@ -177,6 +177,7 @@ export function createChannelTool({
   channelsDir,
   agentsDir,
   agentId,
+  agentName,
   listAgents: _listAgents,
   onPost,
   isEnabled,
@@ -266,11 +267,12 @@ export function createChannelTool({
 
           // 检查是否从桌面端聊天 session 发送，如果是则标记为 [聊天] 身份
           // phone session 在 phone/sessions/ 下，desktop session 在 sessions/ 下
-          let senderName = agentId;
+          // 使用配置里的 agentName（如 prime），而不是目录名 agentId（如 hanako）
+          let senderName = agentName || agentId;
           try {
             const sp = runtimeCtx?.sessionPath || '';
             if (sp && sp.endsWith('.jsonl') && /\/sessions\//.test(sp) && !/\/phone\/sessions\//.test(sp)) {
-              senderName = `[聊天] ${agentId}`;
+              senderName = `[聊天] ${agentName || agentId}`;
             }
           } catch {}
 

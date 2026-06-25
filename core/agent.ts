@@ -557,6 +557,7 @@ export class Agent {
         channelsDir: this.channelsDir,
         agentsDir: this.agentsDir,
         agentId,
+        agentName: this.agentName,
         listAgents,
         isEnabled: () => this._cb?.isChannelsEnabled?.() ?? false,
         createChannelEntry: (input) => this._cb?.createChannelEntry?.(input),
