@@ -526,6 +526,71 @@ async function collectDiaryMaterialResult({
   return { materials: sortMaterials(materials), warnings };
 }
 
+/**
+ * 从自定义文件夹收集日记素材
+ * 支持 JSON 和 Markdown 格式，按文件名日期或 mtime 匹配当天
+ */
+function collectCustomFolderMaterials(customFolders, rangeStart, rangeEnd) {
+  const materials = [];
+  const startMs = rangeStart.getTime();
+  const endMs = rangeEnd.getTime();
+
+  for (const folder of customFolders) {
+    if (!folder.enabled || !folder.path) continue;
+    const folderPath = folder.path.replace(/^~/, process.env.HOME || '');
+    try {
+      if (!fs.existsSync(folderPath)) continue;
+      const files = fs.readdirSync(folderPath);
+      for (const file of files) {
+        const filePath = path.join(folderPath, file);
+        try {
+          const stat = fs.statSync(filePath);
+          if (!stat.isFile()) continue;
+
+          // 判断文件是否属于当天
+          const dateMatch = file.match(/(\d{4}[-_]?\d{2}[-_]?\d{2})/);
+          let fileDate = null;
+          if (dateMatch) {
+            const dateStr = dateMatch[1].replace(/_/g, '-');
+            fileDate = new Date(dateStr + 'T00:00:00');
+          }
+          const isInDateRange = fileDate
+            ? (fileDate.getTime() >= startMs && fileDate.getTime() <= endMs)
+            : (stat.mtimeMs >= startMs && stat.mtimeMs <= endMs);
+          if (!isInDateRange) continue;
+
+          // 读取文件内容
+          const ext = path.extname(file).toLowerCase();
+          let content = '';
+          if (ext === '.json') {
+            try {
+              const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+              content = JSON.stringify(data, null, 2);
+            } catch {
+              content = fs.readFileSync(filePath, 'utf-8');
+            }
+          } else if (ext === '.md' || ext === '.txt') {
+            content = fs.readFileSync(filePath, 'utf-8');
+          } else {
+            continue; // 跳过不支持的格式
+          }
+
+          if (content.trim()) {
+            materials.push({
+              kind: 'custom-folder',
+              sessionId: `${folder.label || path.basename(folderPath)}/${file}`,
+              summary: content.trim(),
+              at: new Date(stat.mtimeMs).toISOString(),
+            });
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  return materials;
+}
+
 export async function collectDiaryMaterials(opts) {
   const { materials } = await collectDiaryMaterialResult(opts);
   return materials;
@@ -557,6 +622,7 @@ export async function writeDiary(opts) {
     cwd, activityStore, sessionDir, targetDate,
     isSessionMemoryEnabledForPath,
     generateTemporarySummary, getCompactionAuth,
+    customFolders,
   } = opts;
 
   // 1. 计算逻辑日，收集摘要与临时补齐材料
@@ -580,6 +646,12 @@ export async function writeDiary(opts) {
     });
     materials = Array.isArray(collected) ? collected : collected.materials;
     warnings = Array.isArray(collected?.warnings) ? collected.warnings : [];
+
+    // 收集自定义文件夹的素材
+    if (Array.isArray(customFolders) && customFolders.length > 0) {
+      const customMaterials = collectCustomFolderMaterials(customFolders, rangeStart, rangeEnd);
+      materials = [...materials, ...customMaterials];
+    }
   } catch (err) {
     const message = getErrorMessage(err);
     log.error(`material collection error: ${message}`);

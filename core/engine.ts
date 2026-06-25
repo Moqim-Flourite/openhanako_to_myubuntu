@@ -2172,6 +2172,7 @@ export class HanaEngine {
       isSessionMemoryEnabledForPath: (sessionPath) => {
         return agent.isSessionMemoryEnabledFor(sessionPath);
       },
+      customFolders: agent.config.diaryDataSources?.customFolders || [],
       getCompactionAuth: async (model) => {
         const auth = await this._models.modelRegistry.getApiKeyAndHeaders(model);
         if (!auth.ok) {
