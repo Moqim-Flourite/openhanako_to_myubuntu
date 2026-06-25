@@ -920,7 +920,21 @@
       "experiments": "实验",
       "about": "关于",
       "security": "安全",
-      "pluginMarketplace": "插件市场"
+      "pluginMarketplace": "插件市场",
+      "dev": "二次开发"
+    },
+    "dev": {
+      "diaryDataSources": "日记数据源",
+      "diaryDataSourcesDesc": "配置 /daily 日记功能的数据来源，包括自定义文件夹。",
+      "customFolders": "自定义文件夹",
+      "noCustomFolders": "暂无自定义文件夹",
+      "addFolder": "添加文件夹",
+      "folderPathPlaceholder": "文件夹路径（如 ~/obsidian/daily）",
+      "folderLabelPlaceholder": "标签（可选）",
+      "folderPathRequired": "请输入文件夹路径",
+      "add": "添加",
+      "save": "保存",
+      "saving": "保存中..."
     },
     "browser": {
       "cookiesTitle": "Cookies",

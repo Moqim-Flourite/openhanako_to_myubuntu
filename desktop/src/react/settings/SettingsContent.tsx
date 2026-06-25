@@ -31,6 +31,7 @@ import { ExperimentsTab } from './tabs/ExperimentsTab';
 import { SecurityTab } from './tabs/SecurityTab';
 import { SharingTab } from './tabs/SharingTab';
 import { AccessTab } from './tabs/AccessTab';
+import { DevTab } from './tabs/DevTab';
 import { getNativeSettingsTabComponent } from './native-settings-tabs';
 import { CropOverlay } from './overlays/CropOverlay';
 import { AgentCreateOverlay } from './overlays/AgentCreateOverlay';
@@ -61,6 +62,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType> = {
   'plugin-marketplace': PluginMarketplaceTab,
   security: SecurityTab,
   about: AboutTab,
+  dev: DevTab,
 };
 
 function connectionState(connection: ServerConnection | null) {
@@ -99,6 +101,7 @@ const TAB_TITLE_KEYS: Record<string, string> = {
   'plugin-marketplace': 'settings.tabs.pluginMarketplace',
   security: 'settings.tabs.security',
   about: 'settings.tabs.about',
+  dev: 'settings.tabs.dev',
 };
 
 const TAB_DESCRIPTION_KEYS: Record<string, string> = {

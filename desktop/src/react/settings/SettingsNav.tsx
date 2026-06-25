@@ -29,6 +29,7 @@ const TAB_ITEMS = [
   { id: 'experiments', key: 'settings.tabs.experiments', d: '<path d="M10 2v6.5L5.5 18a3 3 0 0 0 2.7 4h7.6a3 3 0 0 0 2.7-4L14 8.5V2"/><path d="M8 2h8"/><path d="M7.5 15h9"/>' },
   { id: 'security', key: 'settings.tabs.security', d: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' },
   { id: 'about', key: 'settings.tabs.about', d: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>' },
+  { id: 'dev', key: 'settings.tabs.dev', d: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/><line x1="2" y1="22" x2="8" y2="16"/>' },
 ];
 
 const FALLBACK_PLUGIN_ICON = '<path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/><circle cx="8" cy="6" r="1.5"/><circle cx="16" cy="12" r="1.5"/><circle cx="10" cy="18" r="1.5"/>';
