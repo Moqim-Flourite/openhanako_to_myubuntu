@@ -41,6 +41,7 @@ export const mimoSpeechRecognitionAdapter = {
   async transcribe(input) {
     const fetchImpl = resolveFetch(input);
     const baseUrl = trimTrailingSlash(input.credentials?.baseUrl || input.provider?.baseUrl || "https://api.xiaomimimo.com/v1");
+    console.log('[mimo-asr] baseUrl:', baseUrl, 'hasCredentials:', !!input.credentials?.apiKey, 'providerBaseUrl:', input.provider?.baseUrl);
     const response = await fetchImpl(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -56,6 +57,8 @@ export const mimoSpeechRecognitionAdapter = {
       }),
     });
     const body = await parseJsonResponse(response);
+    console.log('[mimo-asr] raw response:', JSON.stringify(body).slice(0, 1000));
+    console.log('[mimo-asr] response status:', response.status, 'baseUrl:', baseUrl);
     assertOk(response, body, "MiMo transcription failed");
     return {
       text: extractChatCompletionText(body),

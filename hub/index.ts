@@ -256,6 +256,10 @@ export class Hub {
             uiContext: o.uiContext,
             displayMessage: o.displayMessage,
             sessionFileRefs: o.sessionFileRefs,
+            // 从 sessionPath 提取当前 agentId，确保聊天端身份正确标记为 [聊天] {agentId}
+            extraCustomTools: this.getDesktopChannelTools(
+              o.sessionPath ? (this._engine.agentIdFromSessionPath?.(o.sessionPath) || this._engine.agentName || 'hanako') : (this._engine.agentName || 'hanako')
+            ),
           })
           : this._engine.prompt(text, { images: o.images, videos: o.videos, audios: o.audios }),
       },
@@ -340,6 +344,16 @@ export class Hub {
 
   triggerChannelTriage(channelName, opts) {
     return this.triggerChannelDelivery(channelName, opts);
+  }
+
+  /** 获取主聊天 session 可用的频道工具 */
+  getDesktopChannelTools(agentId) {
+    if (!this._channelRouter || !this._engine.isChannelsEnabled?.()) return [];
+    try {
+      return this._channelRouter.createDesktopChannelTools(agentId);
+    } catch {
+      return [];
+    }
   }
 
   async toggleChannels(enabled) {

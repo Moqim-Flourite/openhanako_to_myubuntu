@@ -86,6 +86,7 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
   sessionFileRefs?: Array<{ fileId?: string; sessionPath?: string; label?: string; kind?: string }>;
   uiContext?: any;
   context?: any;
+  extraCustomTools?: any[];
 } = {}) {
   const {
     sessionPath,
@@ -103,6 +104,7 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
     sessionFileRefs,
     uiContext,
     context,
+    extraCustomTools,
   } = opts;
 
   if (!engine || typeof engine.ensureSessionLoaded !== "function" || typeof engine.promptSession !== "function") {
@@ -243,6 +245,7 @@ export async function submitDesktopSessionMessage(engine: any, opts: {
         promptVideoAttachmentPaths,
         promptAudioAttachmentPaths,
         context,
+        extraCustomTools,
       });
       await engine.promptSession(sessionPath, promptText, promptOpts);
     } finally {
@@ -412,6 +415,7 @@ function buildPromptOptions({
   promptVideoAttachmentPaths,
   promptAudioAttachmentPaths,
   context,
+  extraCustomTools,
 }: any = {}) {
   const opts: any = {};
   if (images?.length) opts.images = images;
@@ -421,6 +425,7 @@ function buildPromptOptions({
   if (promptVideoAttachmentPaths?.length) opts.videoAttachmentPaths = promptVideoAttachmentPaths;
   if (promptAudioAttachmentPaths?.length) opts.audioAttachmentPaths = promptAudioAttachmentPaths;
   if (context !== undefined && context !== null) opts.context = context;
+  if (Array.isArray(extraCustomTools) && extraCustomTools.length) opts.extraCustomTools = extraCustomTools;
   return Object.keys(opts).length ? opts : undefined;
 }
 

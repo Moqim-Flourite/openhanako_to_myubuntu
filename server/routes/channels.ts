@@ -92,6 +92,10 @@ function resolveConversationOwnerAgent(engine: any, c: any) {
   return agent;
 }
 
+function normalizeDispatchMode(mode: any) {
+  return mode === 'sequential' ? 'sequential' : 'parallel';
+}
+
 function normalizePhoneSettingsPayload(body: any = {}) {
   const replyMinChars = normalizeOptionalPositiveInt(body.replyMinChars, "replyMinChars");
   const replyMaxChars = normalizeOptionalPositiveInt(body.replyMaxChars, "replyMaxChars");
@@ -120,6 +124,7 @@ function normalizePhoneSettingsPayload(body: any = {}) {
     guardLimit,
     modelOverrideEnabled: override.enabled,
     modelOverrideModel: override.model,
+    dispatchMode: normalizeDispatchMode(body.dispatchMode),
   };
 }
 
@@ -144,6 +149,7 @@ function readChannelPhoneSettingsFromMeta(meta: any) {
     guardLimit: resolveAgentPhoneGuardLimit(meta.agentPhoneGuardLimit, memberCount),
     modelOverrideEnabled: override.enabled,
     modelOverrideModel: override.model,
+    dispatchMode: normalizeDispatchMode(meta.agentPhoneDispatchMode),
   };
 }
 
@@ -309,6 +315,7 @@ export function createChannelsRoute(engine: any, hub: any) {
       agentPhoneModelOverrideEnabled: settings.modelOverrideEnabled ? "true" : "false",
       agentPhoneModelOverrideId: settings.modelOverrideEnabled && settings.modelOverrideModel ? settings.modelOverrideModel.id : "",
       agentPhoneModelOverrideProvider: settings.modelOverrideEnabled && settings.modelOverrideModel ? settings.modelOverrideModel.provider : "",
+      agentPhoneDispatchMode: settings.dispatchMode || 'parallel',
     });
     if (hub?.refreshChannelProactiveSchedule) {
       hub.refreshChannelProactiveSchedule();

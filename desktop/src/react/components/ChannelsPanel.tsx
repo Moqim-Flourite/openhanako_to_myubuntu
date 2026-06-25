@@ -6,6 +6,7 @@ import { fetchConfig } from '../hooks/use-config';
 import { hanaFetch } from '../hooks/use-hana-fetch';
 import { useI18n } from '../hooks/use-i18n';
 import { renderMarkdown } from '../utils/markdown';
+import { findOpenToolIndex, toolCallFromStartEvent, toolCallIdFromEvent } from '../utils/tool-call-identity';
 import { MarkdownContent } from './chat/MarkdownContent';
 import {
   addChannelMember,
@@ -18,7 +19,6 @@ import { loadMessages } from '../stores/session-actions';
 import { subscribeStreamKey } from '../services/stream-key-dispatcher';
 import { useContinuousBottomScroll } from '../hooks/use-continuous-bottom-scroll';
 import { resolveChannelMember, buildAgentMap, formatChannelTime, MemberAvatar } from './channels/ChannelList';
-import { captureChannelSelection } from '../stores/selection-actions';
 import type { MemberInfo } from './channels/ChannelList';
 import { ChatTranscript } from './chat/ChatTranscript';
 import { ContextMenu, type ContextMenuItem } from '../ui';
@@ -34,6 +34,21 @@ const EMPTY_CHAT_ITEMS: ChatListItem[] = [];
 const PHONE_STREAM_MESSAGE_PREFIX = 'agent-phone-stream';
 const CHANNEL_COMPOSER_FOCUS_EVENT = 'hana-channel-composer-focus';
 
+function channelMaxScrollTop(el: HTMLElement): number {
+  return Math.max(0, el.scrollHeight - el.clientHeight);
+}
+
+function setChannelScrollTopInstant(el: HTMLElement, top: number): void {
+  const previousScrollBehavior = el.style.scrollBehavior;
+  el.style.scrollBehavior = 'auto';
+  el.scrollTop = top;
+  if (previousScrollBehavior) {
+    el.style.scrollBehavior = previousScrollBehavior;
+  } else {
+    el.style.removeProperty('scroll-behavior');
+  }
+}
+
 export function requestChannelComposerFocus(channelId: string) {
   if (!channelId || typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(CHANNEL_COMPOSER_FOCUS_EVENT, {
@@ -48,28 +63,24 @@ function resolveDmOwnerId(channel: Channel | undefined, currentAgentId: string |
 export function ChannelsPanel() {
   const channelsEnabled = useStore(s => s.channelsEnabled);
   const activeServerConnection = useStore(s => s.activeServerConnection);
+  const activeServerConnectionId = useStore(s => s.activeServerConnectionId);
 
   // 启动时从后端读频道开关状态；开启时加载频道列表
   useEffect(() => {
     if (!activeServerConnection) return;
-    fetchConfig().then(cfg => {
+    const cacheKey = activeServerConnectionId || activeServerConnection.connectionId || 'local';
+    useStore.getState().setChannelsEnabled(undefined);
+    fetchConfig({ cacheKey }).then(cfg => {
       // 默认关：只有显式 true 才算启用
       const enabled = cfg?.channels?.enabled === true;
       useStore.getState().setChannelsEnabled(enabled);
       if (enabled) loadChannels();
     }).catch(err => console.warn('[channels] init failed:', err));
-  }, [activeServerConnection]);
+  }, [activeServerConnection, activeServerConnectionId]);
 
   // 开关变化后加载频道列表
   useEffect(() => {
-    if (channelsEnabled && activeServerConnection) loadChannels();
-  }, [channelsEnabled, activeServerConnection]);
-
-  // 频道列表自动轮询（每 30 秒刷新一次）
-  useEffect(() => {
-    if (!channelsEnabled || !activeServerConnection) return;
-    const timer = setInterval(() => { loadChannels(); }, 30_000);
-    return () => clearInterval(timer);
+    if (channelsEnabled === true && activeServerConnection) loadChannels();
   }, [channelsEnabled, activeServerConnection]);
 
   return null;
@@ -109,16 +120,12 @@ export function ChannelMessages() {
   const scrollToBottom = useCallback(() => {
     const el = getScrollContainer();
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    setChannelScrollTopInstant(el, channelMaxScrollTop(el));
     isNearBottomRef.current = true;
     setShowNewMessages(false);
   }, [getScrollContainer]);
 
-  const handleCaptureSelection = useCallback(() => {
-    if (currentChannel) captureChannelSelection(currentChannel);
-  }, [currentChannel]);
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     isNearBottomRef.current = true;
     previousChannelRef.current = null;
     previousLengthRef.current = 0;
@@ -133,7 +140,7 @@ export function ChannelMessages() {
     return () => el.removeEventListener('scroll', onScroll);
   }, [checkNearBottom, getScrollContainer, messages.length]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = getScrollContainer();
     const channelChanged = previousChannelRef.current !== currentChannel;
     const previousLength = previousLengthRef.current;
@@ -167,26 +174,14 @@ export function ChannelMessages() {
 
   return (
     <>
-      <div
-        ref={wrapperRef}
-        data-chat-selection-root=""
-        data-session-path={currentChannel}
-        data-selection-type="channel"
-        onMouseUp={handleCaptureSelection}
-        onKeyUp={handleCaptureSelection}
-      >
+      <div ref={wrapperRef}>
         {messages.map((msg, idx) => {
           const isContinuation = msg.sender === lastSender;
           const senderInfo = resolveChannelMember(msg.sender, userName, userAvatarUrl, agents, isDM ? dmOwnerId : currentAgentId, agentMap);
           const isSelf = senderInfo.isUser || (isDM && msg.sender === dmOwnerId);
-          const messageId = `${msg.timestamp}-${msg.sender}`;
           const el = (
             <div
               key={`${msg.timestamp}-${msg.sender}-${idx}`}
-              data-message-id={messageId}
-              data-message-sender={msg.sender}
-              data-message-timestamp={msg.timestamp}
-              data-message-body={msg.body}
               className={
                 styles.channelMsg
                 + (isContinuation ? ` ${styles.channelMsgContinuation}` : '')
@@ -207,27 +202,6 @@ export function ChannelMessages() {
                   className={styles.channelMsgText}
                   html={renderMarkdown(msg.body || '')}
                 />
-                <button
-                  type="button"
-                  className={styles.channelMsgQuoteBtn}
-                  title="引用消息"
-                  onClick={() => {
-                    // 直接添加引用，不经过 SelectionQuoteActionSurface 二次确认
-                    useStore.getState().addQuotedSelection({
-                      text: msg.body,
-                      sourceTitle: `${senderInfo.displayName}`,
-                      sourceKind: 'chat',
-                      sourceSessionPath: currentChannel,
-                      sourceMessageId: messageId,
-                      charCount: msg.body.length,
-                      updatedAt: Date.now(),
-                    });
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                </button>
               </div>
             </div>
           );
@@ -584,7 +558,7 @@ export function AgentPhoneSessionPreview({ sessionPath, agentId, agentYuan }: {
               ...(message.blocks || []),
               {
                 type: 'tool_group',
-                tools: [{ name: event.name, args: event.args, done: false, success: false }],
+                tools: [toolCallFromStartEvent(event)],
                 collapsed: false,
               },
             ],
@@ -596,11 +570,13 @@ export function AgentPhoneSessionPreview({ sessionPath, agentId, agentYuan }: {
             for (let i = blocks.length - 1; i >= 0; i -= 1) {
               const block = blocks[i];
               if (block.type !== 'tool_group') continue;
-              const toolIndex = block.tools.findIndex((tool) => tool.name === event.name && !tool.done);
+              const toolIndex = findOpenToolIndex(block.tools, event);
               if (toolIndex < 0) continue;
               const tools = [...block.tools];
+              const id = toolCallIdFromEvent(event);
               tools[toolIndex] = {
                 ...tools[toolIndex],
+                ...(id ? { id } : {}),
                 done: true,
                 success: !!event.success,
                 details: event.details,
@@ -1067,6 +1043,8 @@ export function ChannelInput() {
   const userName = useStore(s => s.userName);
   const userAvatarUrl = useStore(s => s.userAvatarUrl);
   const currentAgentId = useStore(s => s.currentAgentId);
+  const setDraft = useStore(s => s.setDraft);
+  const drafts = useStore(s => s.drafts);
 
   const agentMap = useMemo(() => buildAgentMap(agents), [agents]);
   const [inputValue, setInputValue] = useState('');
@@ -1076,13 +1054,45 @@ export function ChannelInput() {
   const [mentionSelectedIdx, setMentionSelectedIdx] = useState(0);
   const [mentionStartPos, setMentionStartPos] = useState(-1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // 用于跟踪上一个 channel，避免初始化时触发草稿保存
+  const prevChannelRef = useRef<string | null>(null);
+  // 标记是否正在恢复草稿，避免恢复时触发保存
+  const isRestoringDraftRef = useRef(false);
+
+  // 切换 channel 时恢复草稿
+  useEffect(() => {
+    if (!currentChannel) return;
+    const draftKey = `channel:${currentChannel}`;
+    const draft = useStore.getState().drafts[draftKey] || '';
+    // 标记正在恢复，避免触发草稿保存
+    isRestoringDraftRef.current = true;
+    setInputValue(draft);
+    prevChannelRef.current = currentChannel;
+    // 下一个事件循环清除标记
+    requestAnimationFrame(() => { isRestoringDraftRef.current = false; });
+  }, [currentChannel]);
+
+  // 保存草稿到 store（在 inputValue 变化时）
+  useEffect(() => {
+    if (!currentChannel || !prevChannelRef.current || isRestoringDraftRef.current) return;
+    const draftKey = `channel:${currentChannel}`;
+    useStore.getState().setDraft(draftKey, inputValue);
+  }, [inputValue, currentChannel]);
 
   const handleSend = useCallback(async () => {
     if (sending || !inputValue.trim()) return;
     setSending(true);
-    try { await sendChannelMessage(inputValue.trim()); setInputValue(''); }
+    try {
+      await sendChannelMessage(inputValue.trim());
+      setInputValue('');
+      // 发送成功后清除草稿
+      if (currentChannel) {
+        const draftKey = `channel:${currentChannel}`;
+        useStore.getState().clearDraft(draftKey);
+      }
+    }
     finally { setSending(false); }
-  }, [sending, inputValue]);
+  }, [sending, inputValue, currentChannel]);
 
   const checkMention = useCallback(() => {
     if (!inputRef.current) return;
@@ -1136,33 +1146,6 @@ export function ChannelInput() {
     window.addEventListener(CHANNEL_COMPOSER_FOCUS_EVENT, handleComposerFocus);
     return () => window.removeEventListener(CHANNEL_COMPOSER_FOCUS_EVENT, handleComposerFocus);
   }, [currentChannel]);
-
-  // ── 频道消息引用：将引用文字插入输入框 ──
-  const quotedSelections = useStore(s => s.quotedSelections);
-  const removeQuotedSelection = useStore(s => s.removeQuotedSelection);
-  useEffect(() => {
-    if (!currentChannel || quotedSelections.length === 0) return;
-    // 找到目标为当前频道的引用
-    const idx = quotedSelections.findIndex(
-      s => s.sourceSessionPath === currentChannel && s.sourceKind === 'chat'
-    );
-    if (idx < 0) return;
-    const sel = quotedSelections[idx];
-    // 插入引用文字到输入框
-    const quoted = sel.text.split('\n').map(l => `> ${l}`).join('\n') + '\n';
-    setInputValue(prev => {
-      const trimmed = prev.trimEnd();
-      return trimmed ? `${trimmed}\n\n${quoted}` : quoted;
-    });
-    removeQuotedSelection(idx);
-    // 聚焦输入框
-    requestAnimationFrame(() => {
-      if (!inputRef.current) return;
-      inputRef.current.focus();
-      const pos = inputRef.current.value.length;
-      inputRef.current.setSelectionRange(pos, pos);
-    });
-  }, [currentChannel, quotedSelections, removeQuotedSelection]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !(e.nativeEvent as any).isComposing) {

@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent } f
 import { useEditor, EditorContent } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import { useStore } from '../stores';
+import { useSettingsStore } from '../settings/store';
 import { selectPreviewItems, selectActiveTabId } from '../stores/preview-slice';
 import { selectSessionFiles } from '../stores/selectors/file-refs';
 import { isImageFile, isVideoFile } from '../utils/format';
@@ -346,6 +347,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
   // input 数组缺失视为未知；只有显式 text-only 的模型才在 UI 上标记“辅助视觉”。
   const supportsVision = !Array.isArray(currentModelInfo?.input) || currentModelInfo.input.includes("image");
   const showAudioInput = getModelAudioInputMode(currentModelInfo) === 'native-audio';
+  const showASRInput = Boolean(useSettingsStore(s => s.settingsSnapshot.data?.preferences?.speechRecognition?.enabled));
   const showThinkingControl = useMemo(
     () => shouldShowThinkingControl(currentModelInfo, models),
     [currentModelInfo, models],
@@ -955,21 +957,43 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
       if (!upload?.dest) {
         throw new Error(upload?.error || 'audio upload failed');
       }
-      const sent = await sendVoiceAudioAttachment({
-        fileId: upload.fileId,
-        path: upload.dest,
-        name: upload.name || name,
-        mimeType: 'audio/wav',
-        base64Data,
-        waveform: upload.waveform || waveform,
-      });
-      if (!sent) {
-        throw new Error('audio send failed');
+      if (showAudioInput) {
+        // 原生音频模式：发送音频附件给 agent
+        const sent = await sendVoiceAudioAttachment({
+          fileId: upload.fileId,
+          path: upload.dest,
+          name: upload.name || name,
+          mimeType: 'audio/wav',
+          base64Data,
+          waveform: upload.waveform || waveform,
+        });
+        if (!sent) {
+          throw new Error('audio send failed');
+        }
+      } else if (showASRInput) {
+        // ASR 模式：调用语音识别接口，将结果填入编辑器
+        const asrRes = await hanaFetch('/api/media/asr/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionPath, fileId: upload.fileId }),
+        });
+        const asrData = await asrRes.json();
+        if (asrData?.error) {
+          throw new Error(asrData.error);
+        }
+        const recognizedText = asrData?.text || '';
+        if (recognizedText && editor && !editor.isDestroyed) {
+          editor.commands.focus();
+          editor.commands.insertContent(recognizedText);
+        } else if (!recognizedText) {
+          addToast(t('input.audioTranscriptionEmpty'), 'info', 3000);
+        }
       }
       setAudioRecorderOpen(false);
       setAudioRecordingError(null);
     } catch (err) {
-      const message = t('input.audioRecordingFailed');
+      const isASRError = showASRInput && !showAudioInput;
+      const message = isASRError ? t('input.audioTranscriptionFailed') : t('input.audioRecordingFailed');
       setAudioRecordingError(message);
       addToast(message, 'error', 6000);
       console.warn('[input] failed to finalize audio recording', err);
@@ -978,10 +1002,10 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
       setAudioRecordingElapsed(0);
       restoreEditorFocus();
     }
-  }, [addToast, ensureVoiceSessionPath, restoreEditorFocus, sendVoiceAudioAttachment, t]);
+  }, [addToast, editor, ensureVoiceSessionPath, restoreEditorFocus, sendVoiceAudioAttachment, showASRInput, showAudioInput, t]);
 
   const startAudioRecording = useCallback(async () => {
-    if (inputLocked || !showAudioInput || !connected || isStreaming || sending || modelSwitching || pendingSessionSwitchPath) return;
+    if (inputLocked || !(showAudioInput || showASRInput) || !connected || isStreaming || sending || modelSwitching || pendingSessionSwitchPath) return;
     if (audioRecordingState !== 'idle' || audioRecorderRef.current) return;
     const AudioContextCtor = window.AudioContext
       || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -1052,6 +1076,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
     modelSwitching,
     pendingSessionSwitchPath,
     sending,
+    showASRInput,
     showAudioInput,
     t,
   ]);
@@ -1068,7 +1093,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
 
   const canUseVoiceShortcut = useCallback(() => {
     if (surface !== 'desktop') return false;
-    if (!showAudioInput) return false;
+    if (!(showAudioInput || showASRInput)) return false;
     if (inputLocked || modelSwitching) return false;
     if (typeof document !== 'undefined' && !document.hasFocus()) return false;
     const state = useStore.getState() as Record<string, any>;
@@ -1078,7 +1103,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
       return false;
     }
     return true;
-  }, [inputLocked, modelSwitching, showAudioInput, surface]);
+  }, [inputLocked, modelSwitching, showASRInput, showAudioInput, surface]);
 
   useEffect(() => {
     if (surface !== 'desktop') return undefined;
@@ -1103,11 +1128,11 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
   }, [audioRecordingStartedAt, audioRecordingState]);
 
   useEffect(() => {
-    if (showAudioInput || audioRecordingState === 'idle') return undefined;
+    if ((showAudioInput || showASRInput) || audioRecordingState === 'idle') return undefined;
     void stopAudioRecording({ discard: true });
     setAudioRecorderOpen(false);
     return undefined;
-  }, [audioRecordingState, showAudioInput, stopAudioRecording]);
+  }, [audioRecordingState, showASRInput, showAudioInput, stopAudioRecording]);
 
   useEffect(() => {
     return () => {
@@ -1878,7 +1903,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
             isStreaming={isStreaming}
             hasInput={hasContent}
             canSend={canSend}
-            showAudioInput={showAudioInput}
+            showAudioInput={showAudioInput || showASRInput}
             audioRecordingActive={audioRecordingState === 'recording'}
             audioRecordingBusy={audioRecordingState === 'starting' || audioRecordingState === 'stopping'}
             onAudioToggle={handleAudioRecordToggle}
@@ -1886,7 +1911,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
             onSteer={handleSteer}
             onStop={handleStop}
           />
-          {audioRecorderOpen && showAudioInput && (
+          {audioRecorderOpen && (showAudioInput || showASRInput) && (
             <div className={styles['audio-recording-card']} role="status" aria-live="polite">
               <div className={`${styles['audio-recording-dot']}${audioRecordingState === 'recording' ? ` ${styles['is-live']}` : ''}`} />
               <div className={styles['audio-recording-copy']}>
@@ -1894,7 +1919,7 @@ function InputAreaInner({ surface }: Required<InputAreaProps>) {
                   {audioRecordingState === 'starting'
                     ? t('input.audioRecordingStarting')
                     : audioRecordingState === 'stopping'
-                      ? t('input.audioRecordingSaving')
+                      ? (showASRInput && !showAudioInput ? t('input.audioTranscribing') : t('input.audioRecordingSaving'))
                       : t('input.audioRecording')}
                 </div>
                 <div className={styles['audio-recording-time']}>

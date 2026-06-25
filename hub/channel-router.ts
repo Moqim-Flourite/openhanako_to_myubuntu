@@ -434,6 +434,174 @@ export class ChannelRouter {
     ];
   }
 
+  /**
+   * 为主聊天 session 创建频道工具（channel_read_context + channel_reply）
+   * channel 参数必填，没有“当前频道”概念
+   */
+  createDesktopChannelTools(agentId) {
+    const engine = this._engine;
+    const isZh = getLocale().startsWith("zh");
+    const channelsDir = engine.channelsDir || "";
+
+    return [
+      {
+        name: "channel_read_context",
+        label: isZh ? "读取频道上下文" : "Read channel context",
+        description: isZh
+          ? "读取指定手机群聊频道的消息。数据源是频道聊天记录 Truth。支持分页读取全部历史消息。channel 参数必填。"
+          : "Read messages from a specified phone channel. The source is the channel transcript Truth. Supports pagination. The channel parameter is required.",
+        parameters: Type.Object({
+          channel: Type.String({
+            description: isZh ? "要读取的频道 ID 或名称（必填）。" : "Channel ID or name to read (required).",
+          }),
+          count: Type.Optional(Type.Number({
+            description: isZh ? "要读取消息数量，默认 20，最大 200。" : "Number of messages to read, defaults to 20, max 200.",
+          })),
+          offset: Type.Optional(Type.Number({
+            description: isZh ? "从末尾开始的偏移量，默认 0（最新消息）。" : "Offset from the end, defaults to 0 (latest messages).",
+          })),
+        }),
+        execute: async (_toolCallId, params = {}) => {
+          const req = String(params.channel || "").trim();
+          if (!req) {
+            return {
+              content: [{ type: "text", text: isZh ? "channel 参数必填。" : "The channel parameter is required." }],
+              details: { action: "read_context", error: "missing channel" },
+            };
+          }
+          let targetFile = "";
+          let targetName = req;
+          const exactPath = path.join(channelsDir, `${req}.md`);
+          if (fs.existsSync(exactPath)) {
+            const members = getChannelMembers(exactPath);
+            if (!members.includes(agentId)) {
+              return {
+                content: [{ type: "text", text: isZh ? `你不是频道 "${req}" 的成员。` : `You are not a member of channel "${req}".` }],
+                details: { action: "read_context", error: "not a channel member" },
+              };
+            }
+            targetFile = exactPath;
+          } else {
+            let found = null;
+            if (fs.existsSync(channelsDir)) {
+              for (const f of fs.readdirSync(channelsDir)) {
+                if (!f.endsWith(".md")) continue;
+                const fp = path.join(channelsDir, f);
+                const members = getChannelMembers(fp);
+                if (!members.includes(agentId)) continue;
+                const meta = getChannelMeta(fp);
+                if (meta.name === req || f.replace(/\.md$/, "") === req) {
+                  found = { file: fp, name: meta.name || f.replace(/\.md$/, "") };
+                  break;
+                }
+              }
+            }
+            if (!found) {
+              return {
+                content: [{ type: "text", text: isZh ? `频道 "${req}" 不存在或你未加入。` : `Channel "${req}" not found or you are not a member.` }],
+                details: { action: "read_context", error: "channel not found", channel: req },
+              };
+            }
+            targetFile = found.file;
+            targetName = found.name;
+          }
+          const count = Math.max(1, Math.min(200, Number(params.count) || 20));
+          const offset = Math.max(0, Number(params.offset) || 0);
+          const messages = getRecentMessages(targetFile, count, null, offset);
+          return {
+            content: [{
+              type: "text",
+              text: messages.length > 0 ? formatMessagesForLLM(messages) : (isZh ? "频道暂无消息。" : "No channel messages."),
+            }],
+            details: { action: "read_context", channel: targetName, messageCount: messages.length, offset },
+          };
+        },
+      },
+      {
+        name: "channel_reply",
+        label: isZh ? "发送频道消息" : "Send channel message",
+        description: isZh
+          ? "往指定频道发送消息。channel 参数必填。发送身份自动标记为 '聊天-{agent名}'。"
+          : "Send a message to a specified channel. The channel parameter is required. Identity is auto-signed as 'chat-{agentName}'.",
+        parameters: Type.Object({
+          content: Type.String({
+            description: isZh ? "要发送到频道的正文。" : "Message body to post.",
+          }),
+          channel: Type.String({
+            description: isZh ? "目标频道 ID 或名称（必填）。" : "Target channel ID or name (required).",
+          }),
+          mood: Type.Optional(Type.String({
+            description: isZh ? "可选：本次发言前的内省摘要。" : "Optional private mood summary.",
+          })),
+        }),
+        execute: async (_toolCallId, params = {}) => {
+          const content = String(params.content || "").trim();
+          const channelReq = String(params.channel || "").trim();
+          if (!content) {
+            return {
+              content: [{ type: "text", text: isZh ? "发送失败：content 为空。" : "Send failed: content is empty." }],
+              details: { action: "reply", error: "empty content" },
+            };
+          }
+          if (!channelReq) {
+            return {
+              content: [{ type: "text", text: isZh ? "channel 参数必填。" : "The channel parameter is required." }],
+              details: { action: "reply", error: "missing channel" },
+            };
+          }
+          // 解析目标频道
+          let targetFile = "";
+          let targetName = channelReq;
+          const exactPath = path.join(channelsDir, `${channelReq}.md`);
+          if (fs.existsSync(exactPath)) {
+            targetFile = exactPath;
+          } else if (fs.existsSync(channelsDir)) {
+            for (const f of fs.readdirSync(channelsDir)) {
+              if (!f.endsWith(".md")) continue;
+              const fp = path.join(channelsDir, f);
+              const meta = getChannelMeta(fp);
+              if (meta.name === channelReq || f.replace(/\.md$/, "") === channelReq) {
+                targetFile = fp;
+                targetName = meta.name || f.replace(/\.md$/, "");
+                break;
+              }
+            }
+          }
+          if (!targetFile) {
+            return {
+              content: [{ type: "text", text: isZh ? `频道 "${channelReq}" 不存在。` : `Channel "${channelReq}" not found.` }],
+              details: { action: "reply", error: "channel not found", channel: channelReq },
+            };
+          }
+          // 检查是否是频道成员
+          const members = getChannelMembers(targetFile);
+          if (!members.includes(agentId)) {
+            return {
+              content: [{ type: "text", text: isZh ? `你不是频道 "${channelReq}" 的成员，无法发送消息。` : `You are not a member of channel "${channelReq}".` }],
+              details: { action: "reply", error: "not a channel member", channel: channelReq },
+            };
+          }
+          // 写入频道
+          const senderName = `[聊天] ${agentId}`;
+          try {
+            await appendMessage(targetFile, senderName, content);
+            // 触发投递
+            this.triggerImmediate(targetName)?.catch(() => {});
+            return {
+              content: [{ type: "text", text: isZh ? `已发送到 #${targetName}。` : `Sent to #${targetName}.` }],
+              details: { action: "reply", channel: targetName, senderName, contentLength: content.length },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: isZh ? `发送失败：${err.message}` : `Send failed: ${err.message}` }],
+              details: { action: "reply", error: err.message },
+            };
+          }
+        },
+      },
+    ];
+  }
+
   // ──────────── 生命周期 ────────────
 
   start() {

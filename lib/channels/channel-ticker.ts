@@ -540,11 +540,20 @@ export function createChannelTicker({
     const deliveryLabel = proactiveAgentId
       ? `频道提醒 → ${proactiveAgentId}`
       : `新群聊消息 → 手机送达`;
-    log.log(`${deliveryLabel} #${channelName}（${agents.length}/${allAgents.length} 个 agent${hasMentions ? `，优先 @ ${[...mentionedSet].join(",")}` : ""}）`);
-    debugLog()?.log("ticker", `phone delivery #${channelName} (${agents.length} agents${proactiveAgentId ? `, proactive=${proactiveAgentId}` : ""}${hasMentions ? `, mentioned first: ${[...mentionedSet].join(",")}` : ""})`);
+
+    // 读取调度模式：parallel（默认，批内并发）或 sequential（逐个执行，每个 agent 能看到前一个的回复）
+    let dispatchMode = 'parallel';
+    try {
+      const channelMeta = getChannelMeta(channelFile);
+      dispatchMode = channelMeta.agentPhoneDispatchMode === 'sequential' ? 'sequential' : 'parallel';
+    } catch {}
+
+    log.log(`${deliveryLabel} #${channelName}（${agents.length}/${allAgents.length} 个 agent，模式=${dispatchMode}${hasMentions ? `，优先 @ ${[...mentionedSet].join(",")}` : ""}）`);
+    debugLog()?.log("ticker", `phone delivery #${channelName} (${agents.length} agents, mode=${dispatchMode}${proactiveAgentId ? `, proactive=${proactiveAgentId}` : ""}${hasMentions ? `, mentioned first: ${[...mentionedSet].join(",")}` : ""})`);
 
     // ── 4. 分批并发送达 agent：每批 BATCH_SIZE 个 agent 并行，组间串行 ──
-    const BATCH_SIZE = 3; // 每批最多 3 个 agent 并行调用 LLM
+    // sequential 模式下 BATCH_SIZE=1，每个 agent 逐个执行（能看到前一个的回复）
+    const BATCH_SIZE = dispatchMode === 'sequential' ? 1 : 3;
     try {
       const maxChecks = readGuardLimit(channelFile, memberAgents.length);
       _activeDeliveries.set(channelName, {
@@ -669,6 +678,11 @@ export function createChannelTicker({
         }
 
         if (!replied) break;
+
+        // sequential 模式下移除已处理的 batch，下一轮取下一个 agent
+        if (dispatchMode === 'sequential') {
+          agents = agents.slice(batchAgents.length);
+        }
       }
 
       if (checks >= maxChecks) {

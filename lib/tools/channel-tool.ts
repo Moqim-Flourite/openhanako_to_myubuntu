@@ -211,7 +211,7 @@ export function createChannelTool({
       })),
     }),
 
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId, params, runtimeCtx) => {
       if (isEnabled && !isEnabled()) {
         return {
           content: [{ type: "text", text: t("error.channelsDisabled") }],
@@ -264,13 +264,23 @@ export function createChannelTool({
           });
           if (!resolved.ok) return channelResolveErrorResult("post", params.channel, resolved);
 
-          const { timestamp } = await appendMessage(resolved.filePath, agentId, params.content);
+          // 检查是否从桌面端聊天 session 发送，如果是则标记为 [聊天] 身份
+          // phone session 在 phone/sessions/ 下，desktop session 在 sessions/ 下
+          let senderName = agentId;
+          try {
+            const sp = runtimeCtx?.sessionPath || '';
+            if (sp && sp.endsWith('.jsonl') && /\/sessions\//.test(sp) && !/\/phone\/sessions\//.test(sp)) {
+              senderName = `[聊天] ${agentId}`;
+            }
+          } catch {}
+
+          const { timestamp } = await appendMessage(resolved.filePath, senderName, params.content);
 
           // 触发频道手机送达，让其他 agent 看到新消息并自行行动
           if (onPost) {
             try {
-              onPost(resolved.id, agentId, {
-                sender: agentId,
+              onPost(resolved.id, senderName, {
+                sender: senderName,
                 timestamp,
                 body: params.content,
               });

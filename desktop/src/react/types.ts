@@ -180,6 +180,7 @@ export interface ChannelTickerStatus {
 
 export type ChannelTickerStatusMap = Record<string, ChannelTickerStatus | null>;
 export type AgentPhoneToolMode = 'read_only' | 'write';
+export type AgentPhoneDispatchMode = 'parallel' | 'sequential';
 
 export interface AgentPhoneSettings {
   mode: AgentPhoneToolMode;
@@ -190,6 +191,7 @@ export interface AgentPhoneSettings {
   guardLimit: number;
   modelOverrideEnabled: boolean;
   modelOverrideModel: { id: string; provider: string } | null;
+  dispatchMode: AgentPhoneDispatchMode;
 }
 
 export interface Activity {

@@ -30,9 +30,34 @@ export function listSessionFiles(sessionDir) {
     } catch {}
   }
 
+  function scanDirRecursive(dir, prefix) {
+    try {
+      for (const f of fs.readdirSync(dir)) {
+        const filePath = path.join(dir, f);
+        try {
+          const stat = fs.statSync(filePath);
+          if (stat.isFile() && f.endsWith(".jsonl")) {
+            results.push({
+              sessionId: sessionIdFromFilename(path.basename(filePath)),
+              filename: prefix ? `${prefix}/${f}` : f,
+              filePath,
+              mtime: stat.mtime,
+            });
+          } else if (stat.isDirectory()) {
+            scanDirRecursive(filePath, prefix ? `${prefix}/${f}` : f);
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
   if (!sessionDir) return results;
   scanDir(sessionDir, null);
   scanDir(path.join(sessionDir, "bridge", "owner"), "bridge/owner");
+  // 也扫描 phone sessions 目录（agents/{id}/phone/sessions/）
+  // phone sessions 有子目录结构：phone/sessions/{conversationId}/{timestamp}.jsonl
+  const phoneSessionsDir = path.join(sessionDir, "..", "phone", "sessions");
+  scanDirRecursive(phoneSessionsDir, "phone");
   return results;
 }
 

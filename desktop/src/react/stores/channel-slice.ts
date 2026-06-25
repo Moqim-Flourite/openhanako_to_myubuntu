@@ -1,4 +1,4 @@
-import type { AgentPhoneToolMode, Channel, ChannelAgentActivities, ChannelMessage, ChannelTickerStatusMap } from '../types';
+import type { AgentPhoneDispatchMode, AgentPhoneToolMode, Channel, ChannelAgentActivities, ChannelMessage, ChannelTickerStatusMap } from '../types';
 
 export interface ChannelSlice {
   channels: Channel[];
@@ -23,6 +23,7 @@ export interface ChannelSlice {
   channelAgentGuardLimit: number;
   channelAgentModelOverrideEnabled: boolean;
   channelAgentModelOverrideModel: { id: string; provider: string } | null;
+  channelAgentDispatchMode: AgentPhoneDispatchMode;
   setChannels: (channels: Channel[]) => void;
   setCurrentChannel: (channel: string | null) => void;
   setChannelMessages: (messages: ChannelMessage[]) => void;
@@ -55,6 +56,7 @@ export const createChannelSlice = (
   channelAgentGuardLimit: 36,
   channelAgentModelOverrideEnabled: false,
   channelAgentModelOverrideModel: null,
+  channelAgentDispatchMode: 'parallel',
   setChannels: (channels) => set({ channels }),
   setCurrentChannel: (channel) => set({ currentChannel: channel }),
   setChannelMessages: (messages) => set({ channelMessages: messages }),

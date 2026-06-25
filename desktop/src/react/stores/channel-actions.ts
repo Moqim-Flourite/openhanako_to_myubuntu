@@ -9,7 +9,7 @@
 import { useStore } from './index';
 import { hanaFetch } from '../hooks/use-hana-fetch';
 import { hasServerConnection } from '../services/server-connection';
-import type { AgentPhoneActivity, AgentPhoneSettings, AgentPhoneToolMode, Channel, ChannelAgentActivities, ChannelMessage } from '../types';
+import type { AgentPhoneDispatchMode, AgentPhoneActivity, AgentPhoneSettings, AgentPhoneToolMode, Channel, ChannelAgentActivities, ChannelMessage } from '../types';
 
 // ══════════════════════════════════════════════════════
 // 加载频道列表
@@ -135,6 +135,10 @@ function normalizeNullablePositiveInt(value: unknown): number | null {
   return Math.floor(num);
 }
 
+function normalizeDispatchMode(mode: unknown): AgentPhoneDispatchMode {
+  return mode === 'sequential' ? 'sequential' : 'parallel';
+}
+
 function normalizeAgentPhoneSettings(data: any): AgentPhoneSettings {
   const overrideModel = data?.modelOverrideModel;
   return {
@@ -148,6 +152,7 @@ function normalizeAgentPhoneSettings(data: any): AgentPhoneSettings {
     modelOverrideModel: overrideModel?.id && overrideModel?.provider
       ? { id: String(overrideModel.id), provider: String(overrideModel.provider) }
       : null,
+    dispatchMode: normalizeDispatchMode(data?.dispatchMode),
   };
 }
 
@@ -161,6 +166,7 @@ function applyAgentPhoneSettings(settings: AgentPhoneSettings): void {
     channelAgentGuardLimit: settings.guardLimit,
     channelAgentModelOverrideEnabled: settings.modelOverrideEnabled,
     channelAgentModelOverrideModel: settings.modelOverrideModel,
+    channelAgentDispatchMode: settings.dispatchMode,
   });
 }
 
@@ -198,6 +204,7 @@ export async function loadConversationAgentPhoneSettings(conversationId: string)
         guardLimit: 36,
         modelOverrideEnabled: false,
         modelOverrideModel: null,
+        dispatchMode: 'parallel',
       });
       return;
     }
@@ -214,6 +221,7 @@ export async function loadConversationAgentPhoneSettings(conversationId: string)
       guardLimit: 36,
       modelOverrideEnabled: false,
       modelOverrideModel: null,
+      dispatchMode: 'parallel',
     });
   }
 }
@@ -238,6 +246,7 @@ export async function saveConversationAgentPhoneSettings(patch: Partial<AgentPho
       guardLimit: patch.guardLimit !== undefined ? patch.guardLimit : s.channelAgentGuardLimit,
       modelOverrideEnabled: patch.modelOverrideEnabled !== undefined ? patch.modelOverrideEnabled : s.channelAgentModelOverrideEnabled,
       modelOverrideModel: patch.modelOverrideModel !== undefined ? patch.modelOverrideModel : s.channelAgentModelOverrideModel,
+      dispatchMode: patch.dispatchMode !== undefined ? patch.dispatchMode : s.channelAgentDispatchMode,
     }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
