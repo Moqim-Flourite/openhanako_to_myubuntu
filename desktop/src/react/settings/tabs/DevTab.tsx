@@ -4,6 +4,8 @@ import { t, autoSaveConfig } from '../helpers';
 import { Toggle } from '../widgets/Toggle';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsRow } from '../components/SettingsRow';
+import { useStore } from '../../stores';
+import { saveConversationAgentPhoneSettings } from '../../stores/channel-actions';
 import styles from '../Settings.module.css';
 
 interface CustomFolder {
@@ -15,15 +17,25 @@ interface CustomFolder {
 export function DevTab() {
   const showToast = useSettingsStore(s => s.showToast);
   const settingsConfig = useSettingsStore(s => s.settingsConfig);
+  const channels = useStore(s => s.channels);
   const [customFolders, setCustomFolders] = useState<CustomFolder[]>([]);
   const [newPath, setNewPath] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [saving, setSaving] = useState(false);
+  const [globalMemoryConfigs, setGlobalMemoryConfigs] = useState<any[]>([]);
+  const [newGmName, setNewGmName] = useState('');
+  const [newGmChannel, setNewGmChannel] = useState('');
+  const [newGmSources, setNewGmSources] = useState('');
 
   useEffect(() => {
     const diarySources = (settingsConfig as any)?.diaryDataSources;
     if (diarySources?.customFolders) {
       setCustomFolders(diarySources.customFolders);
+    }
+    // Load globalMemory configs from settings
+    const gmConfigs = (settingsConfig as any)?.globalMemoryConfigs;
+    if (gmConfigs && typeof gmConfigs === 'object') {
+      setGlobalMemoryConfigs(Array.isArray(gmConfigs) ? gmConfigs : []);
     }
   }, [settingsConfig]);
 
@@ -70,6 +82,60 @@ export function DevTab() {
     );
     setCustomFolders(next);
     saveFolders(next);
+  };
+
+  // ── Global Memory Config Management ──
+
+  const saveGlobalMemoryConfigs = async (next: any[]) => {
+    setSaving(true);
+    try {
+      const saved = await autoSaveConfig(
+        { globalMemoryConfigs: next },
+        { silent: true },
+      );
+      if (!saved) throw new Error('save returned false');
+      showToast(t('settings.saved'), 'success');
+    } catch (err: any) {
+      showToast(t('settings.saveFailed') + ': ' + err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addGlobalMemoryConfig = () => {
+    if (!newGmName.trim()) {
+      showToast(t('settings.dev.configNameRequired') || 'Configuration name is required', 'error');
+      return;
+    }
+    const sources = newGmSources.split(',').map(s => s.trim()).filter(Boolean);
+    const next = [
+      ...globalMemoryConfigs,
+      {
+        name: newGmName.trim(),
+        channel: newGmChannel.trim() || undefined,
+        sources: sources.length > 0 ? sources : undefined,
+        enabled: true,
+      },
+    ];
+    setGlobalMemoryConfigs(next);
+    setNewGmName('');
+    setNewGmChannel('');
+    setNewGmSources('');
+    saveGlobalMemoryConfigs(next);
+  };
+
+  const removeGlobalMemoryConfig = (index: number) => {
+    const next = globalMemoryConfigs.filter((_, i) => i !== index);
+    setGlobalMemoryConfigs(next);
+    saveGlobalMemoryConfigs(next);
+  };
+
+  const toggleGlobalMemoryConfig = (index: number) => {
+    const next = globalMemoryConfigs.map((c, i) =>
+      i === index ? { ...c, enabled: !c.enabled } : c
+    );
+    setGlobalMemoryConfigs(next);
+    saveGlobalMemoryConfigs(next);
   };
 
   return (
@@ -144,6 +210,102 @@ export function DevTab() {
             type="button"
             className={styles['settings-btn-primary']}
             onClick={addFolder}
+            disabled={saving}
+          >
+            {saving ? t('settings.saving') : t('settings.dev.add')}
+          </button>
+        </SettingsSection.Footer>
+      </SettingsSection>
+
+      {/* ── Global Memory Configs ── */}
+      <SettingsSection title={t('settings.dev.globalMemory') || '全局记忆配置'} description={t('settings.dev.globalMemoryDesc') || '配置哪些频道可以跨 session 访问全局记忆'}>
+        {globalMemoryConfigs.length > 0 && globalMemoryConfigs.map((config, index) => (
+          <SettingsRow
+            key={index}
+            label={config.name}
+            hint={`${config.channel || '*'}${config.sources ? ` → ${config.sources.join(', ')}` : ''}`}
+            control={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+                <Toggle
+                  on={config.enabled}
+                  onChange={() => toggleGlobalMemoryConfig(index)}
+                />
+                <button
+                  type="button"
+                  className={styles['settings-btn-secondary']}
+                  onClick={() => removeGlobalMemoryConfig(index)}
+                  title={t('settings.remove')}
+                  style={{ padding: '2px 8px', fontSize: '0.85rem' }}
+                >
+                  ×
+                </button>
+              </div>
+            }
+          />
+        ))}
+        {globalMemoryConfigs.length === 0 && (
+          <SettingsRow
+            label={t('settings.dev.globalMemoryConfigs') || '全局记忆配置'}
+            hint={t('settings.dev.noGlobalMemoryConfigs') || '暂无配置'}
+            control={<span />}
+          />
+        )}
+      </SettingsSection>
+
+      <SettingsSection title={t('settings.dev.addGlobalMemory') || '添加全局记忆配置'}>
+        <SettingsRow
+          label={t('settings.dev.configName') || '配置名称'}
+          layout="stacked"
+          control={
+            <input
+              className={styles['settings-input']}
+              type="text"
+              placeholder={t('settings.dev.configNamePlaceholder') || '例如：生活计划'}
+              value={newGmName}
+              onChange={(e) => setNewGmName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addGlobalMemoryConfig(); }}
+              style={{ width: '100%' }}
+            />
+          }
+        />
+        <SettingsRow
+          label={t('settings.dev.targetChannel') || '目标频道'}
+          layout="stacked"
+          control={
+            <select
+              className={styles['settings-input']}
+              value={newGmChannel}
+              onChange={(e) => setNewGmChannel(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <option value="">{t('settings.dev.allChannels') || '所有频道'}</option>
+              {channels.map(ch => (
+                <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
+              ))}
+            </select>
+          }
+        />
+        <SettingsRow
+          label={t('settings.dev.memorySources') || '记忆来源'}
+          hint={t('settings.dev.memorySourcesHint') || '用逗号分隔，如：ch_xxx, bridge:qq:12345'}
+          layout="stacked"
+          control={
+            <input
+              className={styles['settings-input']}
+              type="text"
+              placeholder={t('settings.dev.memorySourcesPlaceholder') || '留空表示全部来源'}
+              value={newGmSources}
+              onChange={(e) => setNewGmSources(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addGlobalMemoryConfig(); }}
+              style={{ width: '100%' }}
+            />
+          }
+        />
+        <SettingsSection.Footer>
+          <button
+            type="button"
+            className={styles['settings-btn-primary']}
+            onClick={addGlobalMemoryConfig}
             disabled={saving}
           >
             {saving ? t('settings.saving') : t('settings.dev.add')}

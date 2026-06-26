@@ -153,6 +153,7 @@ function normalizeAgentPhoneSettings(data: any): AgentPhoneSettings {
       ? { id: String(overrideModel.id), provider: String(overrideModel.provider) }
       : null,
     dispatchMode: normalizeDispatchMode(data?.dispatchMode),
+    globalMemory: data?.globalMemory === true,
   };
 }
 
@@ -167,6 +168,7 @@ function applyAgentPhoneSettings(settings: AgentPhoneSettings): void {
     channelAgentModelOverrideEnabled: settings.modelOverrideEnabled,
     channelAgentModelOverrideModel: settings.modelOverrideModel,
     channelAgentDispatchMode: settings.dispatchMode,
+    channelGlobalMemory: settings.globalMemory,
   });
 }
 
@@ -205,6 +207,7 @@ export async function loadConversationAgentPhoneSettings(conversationId: string)
         modelOverrideEnabled: false,
         modelOverrideModel: null,
         dispatchMode: 'parallel',
+        globalMemory: false,
       });
       return;
     }
@@ -222,6 +225,7 @@ export async function loadConversationAgentPhoneSettings(conversationId: string)
       modelOverrideEnabled: false,
       modelOverrideModel: null,
       dispatchMode: 'parallel',
+      globalMemory: false,
     });
   }
 }
@@ -247,6 +251,7 @@ export async function saveConversationAgentPhoneSettings(patch: Partial<AgentPho
       modelOverrideEnabled: patch.modelOverrideEnabled !== undefined ? patch.modelOverrideEnabled : s.channelAgentModelOverrideEnabled,
       modelOverrideModel: patch.modelOverrideModel !== undefined ? patch.modelOverrideModel : s.channelAgentModelOverrideModel,
       dispatchMode: patch.dispatchMode !== undefined ? patch.dispatchMode : s.channelAgentDispatchMode,
+      globalMemory: patch.globalMemory !== undefined ? patch.globalMemory : s.channelGlobalMemory,
     }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

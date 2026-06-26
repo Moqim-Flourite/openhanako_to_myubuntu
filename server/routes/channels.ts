@@ -125,6 +125,7 @@ function normalizePhoneSettingsPayload(body: any = {}) {
     modelOverrideEnabled: override.enabled,
     modelOverrideModel: override.model,
     dispatchMode: normalizeDispatchMode(body.dispatchMode),
+    globalMemory: body.globalMemory === undefined ? undefined : readBoolean(body.globalMemory),
   };
 }
 
@@ -150,6 +151,7 @@ function readChannelPhoneSettingsFromMeta(meta: any) {
     modelOverrideEnabled: override.enabled,
     modelOverrideModel: override.model,
     dispatchMode: normalizeDispatchMode(meta.agentPhoneDispatchMode),
+    globalMemory: meta.globalMemory === undefined ? false : readBoolean(meta.globalMemory),
   };
 }
 
