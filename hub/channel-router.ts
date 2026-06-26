@@ -115,6 +115,20 @@ export class ChannelRouter {
         id: meta.agentPhoneModelOverrideId,
         provider: meta.agentPhoneModelOverrideProvider,
       });
+      // globalMemory 支持两种格式：
+      //   boolean: true/false（全开/全关）
+      //   object: { enabled: true, sources: ["ch_xxx", "bridge:qq:12345"] }
+      const gmRaw = meta.globalMemory;
+      let globalMemory = false;
+      let allowedSources: string[] = [];
+      if (gmRaw && typeof gmRaw === "object" && !Array.isArray(gmRaw)) {
+        globalMemory = readBoolean(gmRaw.enabled);
+        if (Array.isArray(gmRaw.sources)) {
+          allowedSources = gmRaw.sources.filter((s: any) => typeof s === "string");
+        }
+      } else {
+        globalMemory = readBoolean(gmRaw);
+      }
       return {
         toolMode: normalizeAgentPhoneToolMode(meta.agentPhoneToolMode),
         replyMinChars: positiveIntegerOrNull(meta.agentPhoneReplyMinChars),
@@ -125,7 +139,8 @@ export class ChannelRouter {
         ),
         modelOverrideEnabled: override.enabled,
         modelOverrideModel: override.model,
-        globalMemory: readBoolean(meta.globalMemory),
+        globalMemory,
+        allowedSources,
       };
     } catch {
       return DEFAULT_AGENT_PHONE_SETTINGS;
@@ -1011,6 +1026,7 @@ export class ChannelRouter {
           toolMode: phoneSettings.toolMode,
           modelOverride: phoneSettings.modelOverrideEnabled ? phoneSettings.modelOverrideModel : null,
           globalMemory: phoneSettings.globalMemory,
+          allowedSources: phoneSettings.allowedSources,
           emitEvents: true,
           extraCustomTools: this._createChannelPhoneTools(agentId, channelName, {
             setDecision: (next) => { if (!decision) decision = next; },

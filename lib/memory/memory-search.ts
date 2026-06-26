@@ -15,16 +15,73 @@ import { createModuleLogger } from "../debug-log.ts";
 const log = createModuleLogger("memory-search");
 
 const CHANNEL_SESSION_PREFIX = "channel-";
+const BRIDGE_SESSION_PREFIX_PATTERN = /^(qq|telegram|wechat|feishu)_/;
+
+/**
+ * 把 sources 配置转换为 session_id 匹配函数。
+ * sources 格式：
+ *   - "ch_xxx" → 匹配 "channel-ch_xxx"
+ *   - "bridge:qq:12345" → 匹配 session_id 以 "qq_" 开头且包含 "12345"
+ *   - "bridge:telegram" → 匹配 session_id 以 "telegram_" 开头
+ *   - "*" → 匹配所有
+ */
+function buildSourceMatcher(sources: string[]): ((sessionId: string) => boolean) | null {
+  if (!Array.isArray(sources) || sources.length === 0) return null;
+  const hasWildcard = sources.includes("*");
+  if (hasWildcard) return () => true;
+
+  const channelPatterns: string[] = [];
+  const bridgePatterns: { platform: string; chatId?: string }[] = [];
+
+  for (const src of sources) {
+    if (typeof src !== "string") continue;
+    if (src.startsWith("ch_")) {
+      channelPatterns.push(`channel-${src}`);
+    } else if (src.startsWith("bridge:")) {
+      const parts = src.split(":");
+      const platform = parts[1] || "";
+      const chatId = parts[2] || undefined;
+      if (platform) bridgePatterns.push({ platform, chatId });
+    }
+  }
+
+  return (sessionId: string) => {
+    // 频道匹配：session_id 精确匹配 channel-xxx
+    if (channelPatterns.includes(sessionId)) return true;
+    // bridge 匹配：session_id 以 platform_ 开头，可选 chatId 过滤
+    for (const bp of bridgePatterns) {
+      const prefix = `${bp.platform}_`;
+      if (sessionId.startsWith(prefix)) {
+        if (!bp.chatId) return true; // 只指定平台，不指定 chatId
+        if (sessionId.includes(bp.chatId)) return true;
+      }
+    }
+    return false;
+  };
+}
 
 /**
  * 会话作用域过滤：频道 phone 会话默认看不到「其它频道」的事实。
  * 通用事实（session_id 为空或非频道）和当前频道的事实始终可见，
  * 跨频道检索必须显式传 cross_channel: true（#1670 群聊记忆混淆）。
  *
- * globalMemory 模式下跳过所有 scope 过滤：主 agent 可以看到所有 session 的事实。
+ * globalMemory 模式下：
+ *   - 无 allowedSources：跳过所有 scope 过滤，看所有 session
+ *   - 有 allowedSources：只看白名单内的 session
  */
-function factVisibleInConversationScope(row, scope, crossChannel, globalMemory) {
-  if (globalMemory) return true;
+function factVisibleInConversationScope(
+  row: any,
+  scope: any,
+  crossChannel: boolean,
+  globalMemory: boolean,
+  sourceMatcher: ((sessionId: string) => boolean) | null,
+) {
+  if (globalMemory) {
+    if (!sourceMatcher) return true; // 无白名单，全放行
+    const sessionId = typeof row?.session_id === "string" ? row.session_id : "";
+    if (!sessionId) return true; // 无 session_id 的通用事实始终可见
+    return sourceMatcher(sessionId);
+  }
   if (!scope || scope.kind !== "channel") return true;
   const sessionId = typeof row?.session_id === "string" ? row.session_id : "";
   if (!sessionId.startsWith(CHANNEL_SESSION_PREFIX)) return true;
@@ -43,6 +100,9 @@ function factVisibleInConversationScope(row, scope, crossChannel, globalMemory) 
  * @param {boolean} [opts.globalMemory]
  *   - 全局记忆模式。开启后跳过所有 scope 过滤，agent 可以看到所有 session 的事实。
  *     主 agent 功能专用，不影响其他频道。
+ * @param {string[]} [opts.allowedSources]
+ *   - globalMemory 模式下的来源白名单。
+ *     格式："ch_xxx"（频道）、"bridge:qq:12345"（bridge 聊天）、"bridge:telegram"（平台级）、"*"（全部）
  * @returns {import('../pi-sdk/index.ts').ToolDefinition}
  */
 export function createMemorySearchTool(factStore, opts: any = {}) {
@@ -50,6 +110,9 @@ export function createMemorySearchTool(factStore, opts: any = {}) {
     ? { kind: "channel" as const, channelId: String(opts.conversationScope.channelId) }
     : null;
   const globalMemory = opts.globalMemory === true;
+  // allowedSources: 白名单数组，globalMemory 模式下只看这些来源
+  const allowedSources = Array.isArray(opts.allowedSources) ? opts.allowedSources : [];
+  const sourceMatcher = globalMemory ? buildSourceMatcher(allowedSources) : null;
   // globalMemory 模式下不暴露 cross_channel 参数（已经是全局的，无需显式跨频道）
   const exposeCrossChannel = conversationScope && !globalMemory;
   return {
@@ -94,7 +157,7 @@ export function createMemorySearchTool(factStore, opts: any = {}) {
         const seenIds = new Set();
 
         const crossChannel = conversationScope ? params.cross_channel === true : false;
-        const visibleInScope = (row) => factVisibleInConversationScope(row, conversationScope, crossChannel, globalMemory);
+        const visibleInScope = (row) => factVisibleInConversationScope(row, conversationScope, crossChannel, globalMemory, sourceMatcher);
 
         // 策略 1：标签匹配（优先）
         // globalMemory 模式下收紧 limit，节省 token（小模型场景）

@@ -723,10 +723,15 @@ export class Agent {
    * @param {object} conversationScope - 会话作用域 { kind: "channel", channelId: string }
    * @param {object} [opts] - 额外选项
    * @param {boolean} [opts.globalMemory] - 全局记忆模式，跳过 scope 过滤
+   * @param {string[]} [opts.allowedSources] - globalMemory 模式下的来源白名单
    */
   createConversationScopedMemorySearchTool(conversationScope, opts: any = {}) {
     if (!this._factStore) return null;
-    return createMemorySearchTool(this._factStore, { conversationScope, globalMemory: opts.globalMemory });
+    return createMemorySearchTool(this._factStore, {
+      conversationScope,
+      globalMemory: opts.globalMemory,
+      allowedSources: opts.allowedSources,
+    });
   }
 
   // ════════════════════════════
