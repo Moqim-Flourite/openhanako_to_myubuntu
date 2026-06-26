@@ -372,7 +372,9 @@ export class ChannelRouter {
           }
           if (!isCurrentMember()) return notMemberResult("reply");
 
-          const { timestamp } = await appendMessage(channelFile, agentId, content);
+          const _phoneAgent = this._getAgentInstance(agentId);
+          const _phoneAgentDisplayName = _phoneAgent?.agentName || agentId;
+          const { timestamp } = await appendMessage(channelFile, _phoneAgentDisplayName, content);
           const decision = {
             type: "reply",
             replied: true,
@@ -385,8 +387,8 @@ export class ChannelRouter {
           this._hub.eventBus.emit({
             type: "channel_new_message",
             channelName,
-            sender: agentId,
-            message: { sender: agentId, timestamp, body: content },
+            sender: _phoneAgentDisplayName,
+            message: { sender: _phoneAgentDisplayName, timestamp, body: content },
           }, null);
 
           return {
@@ -582,7 +584,9 @@ export class ChannelRouter {
             };
           }
           // 写入频道
-          const senderName = `[聊天] ${agentId}`;
+          const _agent = this._getAgentInstance(agentId);
+          const _agentDisplayName = _agent?.agentName || agentId;
+          const senderName = `[聊天] ${_agentDisplayName}`;
           try {
             await appendMessage(targetFile, senderName, content);
             // 触发投递
