@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../store';
-import { hanaFetch } from '../api';
-import { t } from '../helpers';
+import { t, autoSaveConfig } from '../helpers';
+import { Toggle } from '../widgets/Toggle';
+import { SettingsSection } from '../components/SettingsSection';
+import { SettingsRow } from '../components/SettingsRow';
 import styles from '../Settings.module.css';
 
 interface CustomFolder {
@@ -14,7 +16,8 @@ export function DevTab() {
   const showToast = useSettingsStore(s => s.showToast);
   const settingsConfig = useSettingsStore(s => s.settingsConfig);
   const [customFolders, setCustomFolders] = useState<CustomFolder[]>([]);
-  const [newFolder, setNewFolder] = useState({ path: '', label: '' });
+  const [newPath, setNewPath] = useState('');
+  const [newLabel, setNewLabel] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -24,18 +27,14 @@ export function DevTab() {
     }
   }, [settingsConfig]);
 
-  const saveConfig = async () => {
+  const saveFolders = async (next: CustomFolder[]) => {
     setSaving(true);
     try {
-      const res = await hanaFetch('/api/config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          diaryDataSources: { customFolders },
-        }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      const saved = await autoSaveConfig(
+        { diaryDataSources: { customFolders: next } },
+        { silent: true },
+      );
+      if (!saved) throw new Error('save returned false');
       showToast(t('settings.saved'), 'success');
     } catch (err: any) {
       showToast(t('settings.saveFailed') + ': ' + err.message, 'error');
@@ -45,107 +44,112 @@ export function DevTab() {
   };
 
   const addFolder = () => {
-    if (!newFolder.path.trim()) {
+    if (!newPath.trim()) {
       showToast(t('settings.dev.folderPathRequired'), 'error');
       return;
     }
-    setCustomFolders([
+    const next = [
       ...customFolders,
-      { path: newFolder.path.trim(), label: newFolder.label.trim() || newFolder.path.trim(), enabled: true },
-    ]);
-    setNewFolder({ path: '', label: '' });
+      { path: newPath.trim(), label: newLabel.trim() || newPath.trim(), enabled: true },
+    ];
+    setCustomFolders(next);
+    setNewPath('');
+    setNewLabel('');
+    saveFolders(next);
   };
 
   const removeFolder = (index: number) => {
-    setCustomFolders(customFolders.filter((_, i) => i !== index));
+    const next = customFolders.filter((_, i) => i !== index);
+    setCustomFolders(next);
+    saveFolders(next);
   };
 
   const toggleFolder = (index: number) => {
-    setCustomFolders(customFolders.map((f, i) =>
+    const next = customFolders.map((f, i) =>
       i === index ? { ...f, enabled: !f.enabled } : f
-    ));
+    );
+    setCustomFolders(next);
+    saveFolders(next);
   };
 
   return (
-    <div className={styles['settings-section']}>
-      <h2 className={styles['settings-section-title']}>{t('settings.dev.diaryDataSources')}</h2>
-      <p className={styles['settings-section-description']}>
-        {t('settings.dev.diaryDataSourcesDesc')}
-      </p>
-
-      <div className={styles['settings-form-field']}>
-        <label className={styles['settings-label']}>{t('settings.dev.customFolders')}</label>
-        {customFolders.length > 0 ? (
-          <div className={styles['settings-list']}>
-            {customFolders.map((folder, index) => (
-              <div key={index} className={styles['settings-list-item']}>
-                <div className={styles['settings-list-item-content']}>
-                  <span className={styles['settings-list-item-title']}>{folder.label}</span>
-                  <span className={styles['settings-list-item-subtitle']}>{folder.path}</span>
-                </div>
-                <div className={styles['settings-list-item-actions']}>
-                  <button
-                    type="button"
-                    className={styles['settings-toggle-btn']}
-                    onClick={() => toggleFolder(index)}
-                    title={folder.enabled ? t('settings.disable') : t('settings.enable')}
-                  >
-                    {folder.enabled ? '✓' : '✗'}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles['settings-remove-btn']}
-                    onClick={() => removeFolder(index)}
-                    title={t('settings.remove')}
-                  >
-                    ×
-                  </button>
-                </div>
+    <div className={`${styles['settings-tab-content']} ${styles['active']}`} data-tab="dev">
+      <SettingsSection title={t('settings.dev.diaryDataSources')} description={t('settings.dev.diaryDataSourcesDesc')}>
+        {customFolders.length > 0 && customFolders.map((folder, index) => (
+          <SettingsRow
+            key={index}
+            label={folder.label}
+            hint={folder.path}
+            control={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+                <Toggle
+                  on={folder.enabled}
+                  onChange={() => toggleFolder(index)}
+                />
+                <button
+                  type="button"
+                  className={styles['settings-btn-secondary']}
+                  onClick={() => removeFolder(index)}
+                  title={t('settings.remove')}
+                  style={{ padding: '2px 8px', fontSize: '0.85rem' }}
+                >
+                  ×
+                </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className={styles['settings-empty-text']}>{t('settings.dev.noCustomFolders')}</p>
+            }
+          />
+        ))}
+        {customFolders.length === 0 && (
+          <SettingsRow
+            label={t('settings.dev.customFolders')}
+            hint={t('settings.dev.noCustomFolders')}
+            control={<span />}
+          />
         )}
-      </div>
+      </SettingsSection>
 
-      <div className={styles['settings-form-field']}>
-        <label className={styles['settings-label']}>{t('settings.dev.addFolder')}</label>
-        <div className={styles['settings-input-group']}>
-          <input
-            className={styles['settings-input']}
-            type="text"
-            placeholder={t('settings.dev.folderPathPlaceholder')}
-            value={newFolder.path}
-            onChange={(e) => setNewFolder({ ...newFolder, path: e.target.value })}
-          />
-          <input
-            className={styles['settings-input']}
-            type="text"
-            placeholder={t('settings.dev.folderLabelPlaceholder')}
-            value={newFolder.label}
-            onChange={(e) => setNewFolder({ ...newFolder, label: e.target.value })}
-          />
+      <SettingsSection title={t('settings.dev.addFolder')}>
+        <SettingsRow
+          label={t('settings.dev.folderPathPlaceholder')}
+          layout="stacked"
+          control={
+            <input
+              className={styles['settings-input']}
+              type="text"
+              placeholder={t('settings.dev.folderPathPlaceholder')}
+              value={newPath}
+              onChange={(e) => setNewPath(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addFolder(); }}
+              style={{ width: '100%' }}
+            />
+          }
+        />
+        <SettingsRow
+          label={t('settings.dev.folderLabelPlaceholder')}
+          layout="stacked"
+          control={
+            <input
+              className={styles['settings-input']}
+              type="text"
+              placeholder={t('settings.dev.folderLabelPlaceholder')}
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addFolder(); }}
+              style={{ width: '100%' }}
+            />
+          }
+        />
+        <SettingsSection.Footer>
           <button
             type="button"
-            className={styles['settings-btn']}
+            className={styles['settings-btn-primary']}
             onClick={addFolder}
+            disabled={saving}
           >
-            {t('settings.dev.add')}
+            {saving ? t('settings.saving') : t('settings.dev.add')}
           </button>
-        </div>
-      </div>
-
-      <div className={styles['settings-form-field']}>
-        <button
-          type="button"
-          className={styles['settings-primary-btn']}
-          onClick={saveConfig}
-          disabled={saving}
-        >
-          {saving ? t('settings.saving') : t('settings.save')}
-        </button>
-      </div>
+        </SettingsSection.Footer>
+      </SettingsSection>
     </div>
   );
 }
