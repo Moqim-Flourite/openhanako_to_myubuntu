@@ -40,7 +40,7 @@ function normalizeTextFromContent(content) {
 }
 
 function createUserAbortError() {
-  const abortErr = new Error("This operation was aborted");
+  const abortErr = new Error("This operation was aborted") as Error & { type: string };
   abortErr.name = "AbortError";
   abortErr.type = "aborted";
   return abortErr;
@@ -450,7 +450,7 @@ export async function callText({
     headers,
     body: JSON.stringify(body),
     signal: combinedSignal,
-  }).catch(err => {
+  }).catch((err): never => {
     clearTimeout(slowTimer);
     throwAbortOrTimeout(err, signal, modelId);
   });
@@ -465,7 +465,7 @@ export async function callText({
     } else {
       rawText = await res.text();
     }
-  } catch (err) {
+  } catch (err): never {
     clearTimeout(slowTimer);
     throwAbortOrTimeout(err, signal, modelId);
   }
