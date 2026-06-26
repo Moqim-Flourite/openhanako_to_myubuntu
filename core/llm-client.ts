@@ -450,9 +450,10 @@ export async function callText({
     headers,
     body: JSON.stringify(body),
     signal: combinedSignal,
-  }).catch((err): never => {
+  }).catch((err) => {
     clearTimeout(slowTimer);
     throwAbortOrTimeout(err, signal, modelId);
+    throw err; // unreachable but satisfies TypeScript
   });
 
   // ── 5. 解析响应 ──
@@ -488,8 +489,7 @@ export async function callText({
       // 附带 Retry-After 头信息，方便调用方做退避
       const retryAfter = res.headers?.get?.('retry-after');
       throw new AppError('LLM_RATE_LIMITED', {
-        context: { model: modelId, retryAfter: retryAfter ? Number(retryAfter) * 1000 : null },
-        status: 429,
+        context: { model: modelId, retryAfter: retryAfter ? Number(retryAfter) * 1000 : null, status: 429 },
       });
     }
     throw new AppError('UNKNOWN', { message, context: { model: modelId, status: res.status } });

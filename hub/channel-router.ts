@@ -50,7 +50,11 @@ export class ChannelRouter {
    */
   static _AGENT_ORDER_TTL = 30_000; // 30 秒
 
-  constructor({ hub }) {
+  declare _hub: any;
+  declare _ticker: any;
+  declare _agentOrderCache: any;
+
+  constructor({ hub }: { hub: any }) {
     this._hub = hub;
     this._ticker = null;
     this._agentOrderCache = null; // { list: string[], ts: number }
