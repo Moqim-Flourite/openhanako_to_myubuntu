@@ -465,7 +465,7 @@ export async function callText({
     } else {
       rawText = await res.text();
     }
-  } catch (err): never {
+  } catch (err) {
     clearTimeout(slowTimer);
     throwAbortOrTimeout(err, signal, modelId);
   }
