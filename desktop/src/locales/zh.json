@@ -934,7 +934,20 @@
       "folderPathRequired": "请输入文件夹路径",
       "add": "添加",
       "save": "保存",
-      "saving": "保存中..."
+      "saving": "保存中...",
+      "globalMemory": "全局记忆配置",
+      "globalMemoryDesc": "配置哪些频道可以跨 session 访问全局记忆，用于主 agent 功能。",
+      "globalMemoryConfigs": "全局记忆配置",
+      "noGlobalMemoryConfigs": "暂无配置",
+      "addGlobalMemory": "添加全局记忆配置",
+      "configName": "配置名称",
+      "configNamePlaceholder": "例如：生活计划",
+      "configNameRequired": "请输入配置名称",
+      "targetChannel": "目标频道",
+      "allChannels": "所有频道",
+      "memorySources": "记忆来源",
+      "memorySourcesHint": "用逗号分隔，如：ch_xxx, bridge:qq:12345",
+      "memorySourcesPlaceholder": "留空表示全部来源"
     },
     "browser": {
       "cookiesTitle": "Cookies",

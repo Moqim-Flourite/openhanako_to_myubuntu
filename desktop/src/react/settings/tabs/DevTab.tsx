@@ -104,7 +104,7 @@ export function DevTab() {
 
   const addGlobalMemoryConfig = () => {
     if (!newGmName.trim()) {
-      showToast(t('settings.dev.configNameRequired') || 'Configuration name is required', 'error');
+      showToast(t('settings.dev.configNameRequired'), 'error');
       return;
     }
     const sources = newGmSources.split(',').map(s => s.trim()).filter(Boolean);
@@ -218,7 +218,7 @@ export function DevTab() {
       </SettingsSection>
 
       {/* ── Global Memory Configs ── */}
-      <SettingsSection title={t('settings.dev.globalMemory') || '全局记忆配置'} description={t('settings.dev.globalMemoryDesc') || '配置哪些频道可以跨 session 访问全局记忆'}>
+      <SettingsSection title={t('settings.dev.globalMemory')} description={t('settings.dev.globalMemoryDesc')}>
         {globalMemoryConfigs.length > 0 && globalMemoryConfigs.map((config, index) => (
           <SettingsRow
             key={index}
@@ -245,22 +245,22 @@ export function DevTab() {
         ))}
         {globalMemoryConfigs.length === 0 && (
           <SettingsRow
-            label={t('settings.dev.globalMemoryConfigs') || '全局记忆配置'}
-            hint={t('settings.dev.noGlobalMemoryConfigs') || '暂无配置'}
+            label={t('settings.dev.globalMemoryConfigs')}
+            hint={t('settings.dev.noGlobalMemoryConfigs')}
             control={<span />}
           />
         )}
       </SettingsSection>
 
-      <SettingsSection title={t('settings.dev.addGlobalMemory') || '添加全局记忆配置'}>
+      <SettingsSection title={t('settings.dev.addGlobalMemory')}>
         <SettingsRow
-          label={t('settings.dev.configName') || '配置名称'}
+          label={t('settings.dev.configName')}
           layout="stacked"
           control={
             <input
               className={styles['settings-input']}
               type="text"
-              placeholder={t('settings.dev.configNamePlaceholder') || '例如：生活计划'}
+              placeholder={t('settings.dev.configNamePlaceholder')}
               value={newGmName}
               onChange={(e) => setNewGmName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') addGlobalMemoryConfig(); }}
@@ -269,7 +269,7 @@ export function DevTab() {
           }
         />
         <SettingsRow
-          label={t('settings.dev.targetChannel') || '目标频道'}
+          label={t('settings.dev.targetChannel')}
           layout="stacked"
           control={
             <select
@@ -278,7 +278,7 @@ export function DevTab() {
               onChange={(e) => setNewGmChannel(e.target.value)}
               style={{ width: '100%' }}
             >
-              <option value="">{t('settings.dev.allChannels') || '所有频道'}</option>
+              <option value="">{t('settings.dev.allChannels')}</option>
               {channels.map(ch => (
                 <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
               ))}
@@ -286,14 +286,14 @@ export function DevTab() {
           }
         />
         <SettingsRow
-          label={t('settings.dev.memorySources') || '记忆来源'}
-          hint={t('settings.dev.memorySourcesHint') || '用逗号分隔，如：ch_xxx, bridge:qq:12345'}
+          label={t('settings.dev.memorySources')}
+          hint={t('settings.dev.memorySourcesHint')}
           layout="stacked"
           control={
             <input
               className={styles['settings-input']}
               type="text"
-              placeholder={t('settings.dev.memorySourcesPlaceholder') || '留空表示全部来源'}
+              placeholder={t('settings.dev.memorySourcesPlaceholder')}
               value={newGmSources}
               onChange={(e) => setNewGmSources(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') addGlobalMemoryConfig(); }}
