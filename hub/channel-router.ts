@@ -38,6 +38,7 @@ import {
   normalizeAgentPhoneModelOverride,
   positiveIntegerOrDefault,
   positiveIntegerOrNull,
+  readBoolean,
 } from "../lib/conversations/agent-phone-prompt.ts";
 
 const log = createModuleLogger("channel");
@@ -124,6 +125,7 @@ export class ChannelRouter {
         ),
         modelOverrideEnabled: override.enabled,
         modelOverrideModel: override.model,
+        globalMemory: readBoolean(meta.globalMemory),
       };
     } catch {
       return DEFAULT_AGENT_PHONE_SETTINGS;
@@ -1008,6 +1010,7 @@ export class ChannelRouter {
           conversationType: "channel",
           toolMode: phoneSettings.toolMode,
           modelOverride: phoneSettings.modelOverrideEnabled ? phoneSettings.modelOverrideModel : null,
+          globalMemory: phoneSettings.globalMemory,
           emitEvents: true,
           extraCustomTools: this._createChannelPhoneTools(agentId, channelName, {
             setDecision: (next) => { if (!decision) decision = next; },

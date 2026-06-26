@@ -306,7 +306,8 @@ export async function runAgentPhoneSession(agentId, rounds, {
   extraCustomTools = [],
   returnDiagnostics = false,
   now = new Date(),
-}: { engine?: any; signal?: any; conversationId?: any; conversationType?: string; systemAppend?: any; noMemory?: boolean; toolMode?: string; modelOverride?: any; onActivity?: any; onSessionReady?: any; emitEvents?: boolean; extraCustomTools?: any[]; returnDiagnostics?: boolean; now?: Date } = {}) {
+  globalMemory = false,
+}: { engine?: any; signal?: any; conversationId?: any; conversationType?: string; systemAppend?: any; noMemory?: boolean; toolMode?: string; modelOverride?: any; onActivity?: any; onSessionReady?: any; emitEvents?: boolean; extraCustomTools?: any[]; returnDiagnostics?: boolean; now?: Date; globalMemory?: boolean } = {}) {
   if (!conversationId) throw new Error("conversationId is required for agent phone session");
   assertAgentPhoneEnabled(engine);
 
@@ -367,9 +368,13 @@ export async function runAgentPhoneSession(agentId, rounds, {
   const { tools, customTools } = filterAgentPhoneTools(built, { toolMode });
   // 频道会话使用作用域化的 search_memory：默认排除其它频道事实，
   // 跨频道检索需显式 cross_channel 参数（#1670 群聊记忆混淆）。
+  // globalMemory 模式下跳过 scope 过滤，agent 可以看到所有 session 的事实。
   const scopedMemorySearch = conversationType === "channel"
     && typeof agent.createConversationScopedMemorySearchTool === "function"
-    ? agent.createConversationScopedMemorySearchTool({ kind: "channel", channelId: conversationId })
+    ? agent.createConversationScopedMemorySearchTool(
+        { kind: "channel", channelId: conversationId },
+        { globalMemory },
+      )
     : null;
   const sessionCustomTools = [
     ...applyConversationScopedMemorySearch(customTools, scopedMemorySearch),
