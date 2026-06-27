@@ -174,7 +174,7 @@ export function ChannelMessages() {
         // 尝试恢复保存的滚动位置，没有则滚到底
         // 从 store 读取最新的滚动位置（不依赖闭包里的旧值）
         const savedTop = currentChannel ? useStore.getState().channelScrollPositions[currentChannel] : undefined;
-        if (savedTop !== undefined && channelChanged) {
+        if (savedTop !== undefined) {
           setChannelScrollTopInstant(el, savedTop);
           isNearBottomRef.current = (el.scrollHeight - savedTop - el.clientHeight) <= CHANNEL_SCROLL_THRESHOLD;
         } else {
