@@ -871,7 +871,7 @@ const CronConfirmBlock = memo(function CronConfirmBlock({ block, sessionPath }: 
   const [status, setStatus] = useState(block.status);
   const [modalOpen, setModalOpen] = useState(false);
   const isSuggestionCard = block.type === 'suggestion_card';
-  const isAutomationSuggestion = block.type !== 'suggestion_card'
+  const isAutomationSuggestion = isSuggestionCard
     || block.kind === 'automation_draft'
     || block.detail?.kind === 'automation_draft';
   const jobData = block.jobData || block.detail?.jobData || {};
