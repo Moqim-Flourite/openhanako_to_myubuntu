@@ -1378,10 +1378,26 @@ export function ChannelInput() {
     if (e.key === 'Escape') { e.preventDefault(); setMentionActive(false); }
   }, [mentionActive, mentionItems, mentionSelectedIdx, insertMention, handleSend]);
 
+  const adjustHeight = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, []);
+
+  // 输入时自动调整高度
   const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
-    requestAnimationFrame(() => checkMention());
-  }, [checkMention]);
+    requestAnimationFrame(() => {
+      checkMention();
+      adjustHeight();
+    });
+  }, [checkMention, adjustHeight]);
+
+  // 草稿恢复后也调整高度
+  useEffect(() => {
+    requestAnimationFrame(() => adjustHeight());
+  }, [inputValue, adjustHeight]);
 
   if (isDM || !currentChannel) return null;
 

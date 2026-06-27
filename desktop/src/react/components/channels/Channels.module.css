@@ -584,7 +584,7 @@
     background: none;
     color: var(--text);
     outline: none;
-    max-height: 120px;
+    max-height: 200px;
     overflow-y: auto;
     scrollbar-width: none;
     line-height: 1.5;
