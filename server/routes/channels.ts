@@ -321,7 +321,7 @@ export function createChannelsRoute(engine: any, hub: any) {
       agentPhoneModelOverrideProvider: settings.modelOverrideEnabled && settings.modelOverrideModel ? settings.modelOverrideModel.provider : "",
       agentPhoneDispatchMode: settings.dispatchMode || 'parallel',
       globalMemory: settings.globalMemory ? 'true' : 'false',
-    globalMemorySources: settings.globalMemorySources ? JSON.stringify(settings.globalMemorySources) : '',
+      globalMemorySources: settings.globalMemorySources ? JSON.stringify(settings.globalMemorySources) : '',
     });
     if (hub?.refreshChannelProactiveSchedule) {
       hub.refreshChannelProactiveSchedule();

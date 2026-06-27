@@ -5,7 +5,7 @@ import { Toggle } from '../widgets/Toggle';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsRow } from '../components/SettingsRow';
 import { useStore } from '../../stores';
-import { saveConversationAgentPhoneSettings } from '../../stores/channel-actions';
+import { hanaFetch } from '../../hooks/use-hana-fetch';
 import styles from '../Settings.module.css';
 
 interface CustomFolder {
@@ -96,17 +96,19 @@ export function DevTab() {
       );
       if (!saved) throw new Error('save returned false');
 
-      // Also update each channel's frontmatter
+      // Also update each channel's frontmatter via direct API call
       for (const config of next) {
         if (config.channel) {
           try {
-            // Switch to the channel first
-            useStore.setState({ currentChannel: config.channel });
-            // Save globalMemory settings to channel frontmatter
-            await saveConversationAgentPhoneSettings({
-              globalMemory: config.enabled,
-              globalMemorySources: config.sources || [],
+            const res = await hanaFetch(`/api/conversations/${encodeURIComponent(config.channel)}/agent-phone-settings`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                globalMemory: config.enabled,
+                globalMemorySources: config.sources || [],
+              }),
             });
+            if (!res.ok) console.error(`[dev] Failed to update channel ${config.channel}: HTTP ${res.status}`);
           } catch (err) {
             console.error(`[dev] Failed to update channel ${config.channel}:`, err);
           }
@@ -143,9 +145,25 @@ export function DevTab() {
     saveGlobalMemoryConfigs(next);
   };
 
-  const removeGlobalMemoryConfig = (index: number) => {
+  const removeGlobalMemoryConfig = async (index: number) => {
+    const removed = globalMemoryConfigs[index];
     const next = globalMemoryConfigs.filter((_, i) => i !== index);
     setGlobalMemoryConfigs(next);
+    // Clean up channel frontmatter if the removed config had a channel
+    if (removed?.channel) {
+      try {
+        await hanaFetch(`/api/conversations/${encodeURIComponent(removed.channel)}/agent-phone-settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            globalMemory: false,
+            globalMemorySources: [],
+          }),
+        });
+      } catch (err) {
+        console.error(`[dev] Failed to cleanup channel ${removed.channel}:`, err);
+      }
+    }
     saveGlobalMemoryConfigs(next);
   };
 
