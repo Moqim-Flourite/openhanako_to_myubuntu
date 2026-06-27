@@ -1,7 +1,9 @@
 /** ChannelsPanel — 频道系统入口 + 保留组件（子组件在 ./channels/） */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useStore } from '../stores';
+import { getSelectionCommitAnchorRect, captureChannelSelection } from '../stores/selection-actions';
 import { fetchConfig } from '../hooks/use-config';
 import { hanaFetch } from '../hooks/use-hana-fetch';
 import { useI18n } from '../hooks/use-i18n';
@@ -103,6 +105,8 @@ export function ChannelMessages() {
   const previousChannelRef = useRef<string | null>(null);
   const previousLengthRef = useRef(0);
   const [showNewMessages, setShowNewMessages] = useState(false);
+  // 每个频道的滚动位置缓存
+  const scrollPosMapRef = useRef<Map<string, number>>(new Map());
 
   const getScrollContainer = useCallback(() => (
     wrapperRef.current?.closest('.channel-messages') as HTMLElement | null
@@ -125,12 +129,29 @@ export function ChannelMessages() {
     setShowNewMessages(false);
   }, [getScrollContainer]);
 
+  // 频道消息引用：捕获选中文字
+  const handleCaptureSelection = useCallback((event: ReactMouseEvent<HTMLDivElement> | ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!currentChannel) return;
+    captureChannelSelection(currentChannel, getSelectionCommitAnchorRect(event.nativeEvent));
+  }, [currentChannel]);
+
+  // 切换频道时保存旧频道的滚动位置
+  const prevChannelForSaveRef = useRef<string | null>(null);
   useLayoutEffect(() => {
+    // 保存旧频道的滚动位置
+    const oldChannel = prevChannelForSaveRef.current;
+    if (oldChannel) {
+      const el = getScrollContainer();
+      if (el) {
+        scrollPosMapRef.current.set(oldChannel, el.scrollTop);
+      }
+    }
+    prevChannelForSaveRef.current = currentChannel;
     isNearBottomRef.current = true;
     previousChannelRef.current = null;
     previousLengthRef.current = 0;
     setShowNewMessages(false);
-  }, [currentChannel]);
+  }, [currentChannel, getScrollContainer]);
 
   useEffect(() => {
     const el = getScrollContainer();
@@ -148,7 +169,14 @@ export function ChannelMessages() {
 
     if (el && messages.length > 0) {
       if (channelChanged || previousLength === 0) {
-        scrollToBottom();
+        // 尝试恢复保存的滚动位置，没有则滚到底
+        const savedTop = currentChannel ? scrollPosMapRef.current.get(currentChannel) : undefined;
+        if (savedTop !== undefined && channelChanged) {
+          setChannelScrollTopInstant(el, savedTop);
+          isNearBottomRef.current = (el.scrollHeight - savedTop - el.clientHeight) <= CHANNEL_SCROLL_THRESHOLD;
+        } else {
+          scrollToBottom();
+        }
       } else if (grew) {
         const nearNow = el.scrollHeight - el.scrollTop - el.clientHeight <= CHANNEL_SCROLL_THRESHOLD;
         if (isNearBottomRef.current || nearNow) {
@@ -174,7 +202,7 @@ export function ChannelMessages() {
 
   return (
     <>
-      <div ref={wrapperRef}>
+      <div ref={wrapperRef} data-chat-selection-root="" data-session-path={currentChannel || ''} data-selection-type="channel" onMouseUp={handleCaptureSelection} onKeyUp={handleCaptureSelection}>
         {messages.map((msg, idx) => {
           const isContinuation = msg.sender === lastSender;
           const senderInfo = resolveChannelMember(msg.sender, userName, userAvatarUrl, agents, isDM ? dmOwnerId : currentAgentId, agentMap);
@@ -182,6 +210,7 @@ export function ChannelMessages() {
           const el = (
             <div
               key={`${msg.timestamp}-${msg.sender}-${idx}`}
+              data-message-id={`${msg.timestamp}-${msg.sender}`}
               className={
                 styles.channelMsg
                 + (isContinuation ? ` ${styles.channelMsgContinuation}` : '')
@@ -287,7 +316,7 @@ export function ChannelMembers() {
   }
 
   const availableAgents = agents.filter((agent) => !channelMembers.includes(agent.id));
-  const canRemoveMembers = channelMembers.length > 2;
+  const canRemoveMembers = channelMembers.length > 1;
 
   const handleAddClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -754,7 +783,14 @@ export function ChannelAgentSettingsPanel() {
   const modelOverrideEnabled = useStore(s => s.channelAgentModelOverrideEnabled);
   const modelOverrideModel = useStore(s => s.channelAgentModelOverrideModel);
   const dispatchMode = useStore(s => s.channelAgentDispatchMode);
+  const globalMemory = useStore(s => s.channelGlobalMemory);
+  const globalMemorySources = useStore(s => s.channelGlobalMemorySources);
+  const allChannels = useStore(s => s.channels);
   const [saving, setSaving] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [chatSessions, setChatSessions] = useState<any[]>([]);
+  const [bridgeSessions, setBridgeSessions] = useState<any[]>([]);
+  const [bridgePlatform, setBridgePlatform] = useState('');
   const [modelOpen, setModelOpen] = useState(false);
   const [draftMin, setDraftMin] = useState(replyMinChars ? String(replyMinChars) : '');
   const [draftMax, setDraftMax] = useState(replyMaxChars ? String(replyMaxChars) : '');
@@ -768,6 +804,29 @@ export function ChannelAgentSettingsPanel() {
     setDraftReminder(String(reminderIntervalMinutes || 31));
     setDraftGuardLimit(String(guardLimit || 36));
   }, [currentChannel, replyMinChars, replyMaxChars, reminderIntervalMinutes, guardLimit]);
+
+  useEffect(() => {
+    if (!sourcesOpen) return;
+    const loadSessions = async () => {
+      try {
+        const [sessRes, bridgeRes] = await Promise.all([
+          hanaFetch('/api/sessions'),
+          hanaFetch('/api/bridge/sessions'),
+        ]);
+        if (sessRes.ok) {
+          const data = await sessRes.json();
+          setChatSessions(Array.isArray(data) ? data : []);
+        }
+        if (bridgeRes.ok) {
+          const data = await bridgeRes.json();
+          setBridgeSessions(data.sessions || []);
+        }
+      } catch (err) {
+        console.error('[channels] Failed to load sessions for sources:', err);
+      }
+    };
+    void loadSessions();
+  }, [sourcesOpen]);
 
   useEffect(() => {
     if (models.length > 0) return;
@@ -976,6 +1035,134 @@ export function ChannelAgentSettingsPanel() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+        {!isDM && (
+          <div className={styles.agentSettingsField}>
+            <div className={styles.agentSettingsLabel}>{'全局记忆'}</div>
+            <div className={`${styles.agentToolModeToggle} ${styles.agentToolModeToggleFill}`}>
+              <button
+                type="button"
+                className={`${styles.agentToolModeButton}${!globalMemory ? ` ${styles.agentToolModeButtonActive}` : ''}`}
+                disabled={saving}
+                onClick={() => { if (globalMemory && !saving) void saveSettings({ globalMemory: false }); }}
+              >
+                {'关闭'}
+              </button>
+              <button
+                type="button"
+                className={`${styles.agentToolModeButton}${globalMemory ? ` ${styles.agentToolModeButtonActive}` : ''}`}
+                disabled={saving}
+                onClick={() => { if (!globalMemory && !saving) void saveSettings({ globalMemory: true }); }}
+              >
+                {'开启'}
+              </button>
+            </div>
+            {globalMemory && (
+              <div style={{ marginTop: 'var(--space-xs)' }}>
+                <button
+                  type="button"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    padding: '2px 0',
+                    textDecoration: 'underline',
+                  }}
+                  onClick={() => setSourcesOpen(!sourcesOpen)}
+                >
+                  {sourcesOpen ? '▾ 收起来源配置' : '▸ 配置记忆来源'}
+                  {globalMemorySources.length > 0 && !sourcesOpen && (
+                    <span style={{ marginLeft: 4, opacity: 0.6 }}>({globalMemorySources.length})</span>
+                  )}
+                </button>
+                {sourcesOpen && (
+                  <div style={{
+                    marginTop: 'var(--space-xs)',
+                    padding: 'var(--space-xs)',
+                    background: 'var(--surface-1)',
+                    borderRadius: 'var(--radius-sm)',
+                    maxHeight: 300,
+                    overflowY: 'auto',
+                  }}>
+                    {/* 频道 */}
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 4, fontWeight: 600 }}>{'频道'}</div>
+                    {allChannels.filter(c => c.id !== currentChannel).map(ch => {
+                      const sourceKey = `ch_${ch.id}`;
+                      const checked = globalMemorySources.includes(sourceKey);
+                      return (
+                        <label key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: '0.8rem', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={checked} disabled={saving} onChange={() => {
+                            const next = checked ? globalMemorySources.filter(s => s !== sourceKey) : [...globalMemorySources, sourceKey];
+                            void saveSettings({ globalMemorySources: next });
+                          }} />
+                          <span>{ch.name || ch.id}</span>
+                        </label>
+                      );
+                    })}
+                    {allChannels.filter(c => c.id !== currentChannel).length === 0 && (
+                      <div style={{ fontSize: '0.8rem', opacity: 0.5, marginBottom: 8 }}>{'暂无其他频道'}</div>
+                    )}
+
+                    {/* 聊天 */}
+                    {chatSessions.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 4, marginTop: 8, fontWeight: 600 }}>{'聊天'}</div>
+                        {chatSessions.map((s: any) => {
+                          const sourceKey = `session:${s.path}`;
+                          const checked = globalMemorySources.includes(sourceKey);
+                          return (
+                            <label key={s.path} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: '0.8rem', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={checked} disabled={saving} onChange={() => {
+                                const next = checked ? globalMemorySources.filter(v => v !== sourceKey) : [...globalMemorySources, sourceKey];
+                                void saveSettings({ globalMemorySources: next });
+                              }} />
+                              <span>{s.title || s.path}</span>
+                            </label>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* 社交平台聊天 */}
+                    {bridgeSessions.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 4, marginTop: 8, fontWeight: 600 }}>{'社交平台聊天'}</div>
+                        <select
+                          style={{ width: '100%', fontSize: '0.8rem', marginBottom: 4, padding: '2px 4px', background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}
+                          value={bridgePlatform}
+                          onChange={(e) => setBridgePlatform(e.target.value)}
+                        >
+                          <option value="">选择平台...</option>
+                          {[...new Set(bridgeSessions.map((s: any) => s.platform))].map(p => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                        {bridgePlatform && bridgeSessions
+                          .filter((s: any) => s.platform === bridgePlatform)
+                          .map((s: any) => {
+                            const sourceKey = `bridge:${s.platform}:${s.chatId}`;
+                            const checked = globalMemorySources.includes(sourceKey);
+                            return (
+                              <label key={s.chatId} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                <input type="checkbox" checked={checked} disabled={saving} onChange={() => {
+                                  const next = checked ? globalMemorySources.filter(v => v !== sourceKey) : [...globalMemorySources, sourceKey];
+                                  void saveSettings({ globalMemorySources: next });
+                                }} />
+                                <span>{s.displayName || s.chatId}</span>
+                              </label>
+                            );
+                          })}
+                      </>
+                    )}
+
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: 8, fontStyle: 'italic' }}>{'不选则搜索全部记忆'}</div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         <div className={styles.agentSettingsField}>

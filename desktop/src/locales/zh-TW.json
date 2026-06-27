@@ -54,7 +54,7 @@
     "createCancel": "取消",
     "createConfirm": "建立",
     "nameRequired": "請輸入頻道名稱",
-    "minMembers": "至少選擇 2 位 Agent 成員",
+    "minMembers": "至少選擇 1 位 Agent 成員",
     "created": "頻道 #{name} 已建立 ✿",
     "createFailed": "建立失敗",
     "alreadyExists": "頻道已存在",

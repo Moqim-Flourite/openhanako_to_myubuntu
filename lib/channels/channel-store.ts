@@ -12,7 +12,7 @@ import path from "path";
 import crypto from "crypto";
 import { getLocale, t } from "../i18n.ts";
 
-export const MIN_CHANNEL_AGENT_MEMBERS = 2;
+export const MIN_CHANNEL_AGENT_MEMBERS = 1;
 
 const ENCODED_FRONTMATTER_KEYS = new Set();
 

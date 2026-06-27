@@ -60,7 +60,7 @@
     "createCancel": "Cancel",
     "createConfirm": "Create",
     "nameRequired": "Please enter a channel name",
-    "minMembers": "Select at least 2 Agent members",
+    "minMembers": "Select at least 1 Agent member",
     "created": "Channel #{name} created ✿",
     "createFailed": "Create failed",
     "alreadyExists": "Channel already exists",

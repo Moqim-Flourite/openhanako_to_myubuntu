@@ -25,13 +25,14 @@ export function DevTab() {
   const [saving, setSaving] = useState(false);
   const [globalMemoryConfigs, setGlobalMemoryConfigs] = useState<any[]>([]);
   const [newGmName, setNewGmName] = useState('');
-  const [newGmChannel, setNewGmChannel] = useState('');
   const [newGmChannels, setNewGmChannels] = useState<string[]>([]);
   const [newGmAgents, setNewGmAgents] = useState<string[]>([]);
-  const [newGmDms, setNewGmDms] = useState<string[]>([]);
-  const [newGmBridges, setNewGmBridges] = useState<string[]>([]);
-  const [dms, setDms] = useState<any[]>([]);
-  const [bridgeConnections, setBridgeConnections] = useState<any[]>([]);
+  const [newGmSessions, setNewGmSessions] = useState<string[]>([]);
+  const [newGmBridgePlatform, setNewGmBridgePlatform] = useState('');
+  const [newGmBridgeChats, setNewGmBridgeChats] = useState<string[]>([]);
+  const [chatSessions, setChatSessions] = useState<any[]>([]);
+  const [bridgeSessions, setBridgeSessions] = useState<any[]>([]);
+  const bridgePlatforms = [...new Set(bridgeSessions.map((s: any) => s.platform))];
 
   useEffect(() => {
     const diarySources = (settingsConfig as any)?.diaryDataSources;
@@ -45,31 +46,31 @@ export function DevTab() {
     }
   }, [settingsConfig]);
 
-  // Fetch DMs and bridge connections
+  // Fetch chat sessions and bridge sessions
   useEffect(() => {
-    const loadDms = async () => {
+    const loadSessions = async () => {
       try {
-        const res = await hanaFetch('/api/dm');
+        const res = await hanaFetch('/api/sessions');
         if (res.ok) {
           const data = await res.json();
-          setDms(data.dms || []);
+          setChatSessions(Array.isArray(data) ? data : []);
         }
       } catch (err) {
-        console.error('[dev] Failed to load DMs:', err);
+        console.error('[dev] Failed to load sessions:', err);
       }
     };
     const loadBridge = async () => {
       try {
-        const res = await hanaFetch('/api/bridge/status');
+        const res = await hanaFetch('/api/bridge/sessions');
         if (res.ok) {
           const data = await res.json();
-          setBridgeConnections(data.connections || []);
+          setBridgeSessions(data.sessions || []);
         }
       } catch (err) {
-        console.error('[dev] Failed to load bridge status:', err);
+        console.error('[dev] Failed to load bridge sessions:', err);
       }
     };
-    loadDms();
+    loadSessions();
     loadBridge();
   }, []);
 
@@ -130,11 +131,13 @@ export function DevTab() {
       );
       if (!saved) throw new Error('save returned false');
 
-      // Also update each channel's frontmatter via direct API call
+      // Update each selected channel's frontmatter
       for (const config of next) {
-        if (config.channel) {
+        const channelSources = (config.sources || []).filter((s: string) => s.startsWith('ch_'));
+        for (const src of channelSources) {
+          const channelId = src.replace('ch_', '');
           try {
-            const res = await hanaFetch(`/api/conversations/${encodeURIComponent(config.channel)}/agent-phone-settings`, {
+            const res = await hanaFetch(`/api/conversations/${encodeURIComponent(channelId)}/agent-phone-settings`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -142,9 +145,9 @@ export function DevTab() {
                 globalMemorySources: config.sources || [],
               }),
             });
-            if (!res.ok) console.error(`[dev] Failed to update channel ${config.channel}: HTTP ${res.status}`);
+            if (!res.ok) console.error(`[dev] Failed to update channel ${channelId}: HTTP ${res.status}`);
           } catch (err) {
-            console.error(`[dev] Failed to update channel ${config.channel}:`, err);
+            console.error(`[dev] Failed to update channel ${channelId}:`, err);
           }
         }
       }
@@ -166,13 +169,12 @@ export function DevTab() {
     const sources: string[] = [];
     newGmChannels.forEach(ch => sources.push(`ch_${ch}`));
     newGmAgents.forEach(a => sources.push(a));
-    newGmDms.forEach(dm => sources.push(`dm:${dm}`));
-    newGmBridges.forEach(b => sources.push(b));
+    newGmSessions.forEach(s => sources.push(`session:${s}`));
+    newGmBridgeChats.forEach(b => sources.push(`bridge:${newGmBridgePlatform}:${b}`));
     const next = [
       ...globalMemoryConfigs,
       {
         name: newGmName.trim(),
-        channel: newGmChannels.length === 1 ? newGmChannels[0] : undefined,
         sources: sources.length > 0 ? sources : undefined,
         enabled: true,
       },
@@ -181,8 +183,9 @@ export function DevTab() {
     setNewGmName('');
     setNewGmChannels([]);
     setNewGmAgents([]);
-    setNewGmDms([]);
-    setNewGmBridges([]);
+    setNewGmSessions([]);
+    setNewGmBridgePlatform('');
+    setNewGmBridgeChats([]);
     saveGlobalMemoryConfigs(next);
   };
 
@@ -190,19 +193,23 @@ export function DevTab() {
     const removed = globalMemoryConfigs[index];
     const next = globalMemoryConfigs.filter((_, i) => i !== index);
     setGlobalMemoryConfigs(next);
-    // Clean up channel frontmatter if the removed config had a channel
-    if (removed?.channel) {
-      try {
-        await hanaFetch(`/api/conversations/${encodeURIComponent(removed.channel)}/agent-phone-settings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            globalMemory: false,
-            globalMemorySources: [],
-          }),
-        });
-      } catch (err) {
-        console.error(`[dev] Failed to cleanup channel ${removed.channel}:`, err);
+    // Clean up channel frontmatter for removed config
+    if (removed?.sources) {
+      const channelSources = removed.sources.filter((s: string) => s.startsWith('ch_'));
+      for (const src of channelSources) {
+        const channelId = src.replace('ch_', '');
+        try {
+          await hanaFetch(`/api/conversations/${encodeURIComponent(channelId)}/agent-phone-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              globalMemory: false,
+              globalMemorySources: [],
+            }),
+          });
+        } catch (err) {
+          console.error(`[dev] Failed to cleanup channel ${channelId}:`, err);
+        }
       }
     }
     saveGlobalMemoryConfigs(next);
@@ -347,43 +354,8 @@ export function DevTab() {
           }
         />
         <SettingsRow
-          label={t('settings.dev.targetChannel')}
-          layout="stacked"
-          control={
-            <select
-              className={styles['settings-input']}
-              value={newGmChannel}
-              onChange={(e) => setNewGmChannel(e.target.value)}
-              style={{ width: '100%' }}
-            >
-              <option value="">{t('settings.dev.allChannels')}</option>
-              {channels.map(ch => (
-                <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
-              ))}
-            </select>
-          }
-        />
-        <SettingsRow
-          label={t('settings.dev.selectChannels') || '选择频道'}
-          hint={t('settings.dev.multiSelectHint') || '可多选'}
-          layout="stacked"
-          control={
-            <select
-              className={styles['settings-input']}
-              multiple
-              value={newGmChannels}
-              onChange={(e) => setNewGmChannels(Array.from(e.target.selectedOptions, o => o.value))}
-              style={{ width: '100%', minHeight: '80px' }}
-            >
-              {channels.map(ch => (
-                <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
-              ))}
-            </select>
-          }
-        />
-        <SettingsRow
-          label={t('settings.dev.selectAgents') || '选择 Agent'}
-          hint={t('settings.dev.multiSelectHint') || '可多选'}
+          label={'选择 Agent'}
+          hint={'可多选'}
           layout="stacked"
           control={
             <select
@@ -400,39 +372,74 @@ export function DevTab() {
           }
         />
         <SettingsRow
-          label={t('settings.dev.selectDms') || '选择聊天'}
-          hint={t('settings.dev.multiSelectHint') || '可多选'}
+          label={'选择频道'}
+          hint={'可多选'}
           layout="stacked"
           control={
             <select
               className={styles['settings-input']}
               multiple
-              value={newGmDms}
-              onChange={(e) => setNewGmDms(Array.from(e.target.selectedOptions, o => o.value))}
+              value={newGmChannels}
+              onChange={(e) => setNewGmChannels(Array.from(e.target.selectedOptions, o => o.value))}
               style={{ width: '100%', minHeight: '80px' }}
             >
-              {dms.map(dm => (
-                <option key={dm.peerId} value={dm.peerId}>{dm.peerName || dm.peerId}</option>
+              {channels.map(ch => (
+                <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
               ))}
             </select>
           }
         />
         <SettingsRow
-          label={t('settings.dev.selectBridges') || '选择社交平台聊天'}
-          hint={t('settings.dev.multiSelectHint') || '可多选'}
+          label={'选择聊天'}
+          hint={'从主聊天区已有的聊天中多选'}
           layout="stacked"
           control={
             <select
               className={styles['settings-input']}
               multiple
-              value={newGmBridges}
-              onChange={(e) => setNewGmBridges(Array.from(e.target.selectedOptions, o => o.value))}
+              value={newGmSessions}
+              onChange={(e) => setNewGmSessions(Array.from(e.target.selectedOptions, o => o.value))}
               style={{ width: '100%', minHeight: '80px' }}
             >
-              {bridgeConnections.map(conn => (
-                <option key={conn.id || conn.platform} value={`${conn.platform}:${conn.chatId || ''}`}>{conn.platform} - {conn.chatId || conn.name || ''}</option>
+              {chatSessions.map((s: any) => (
+                <option key={s.path} value={s.path}>{s.title || s.path}</option>
               ))}
             </select>
+          }
+        />
+        <SettingsRow
+          label={'选择社交平台聊天'}
+          hint={'先选平台，再选该平台的具体聊天'}
+          layout="stacked"
+          control={
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
+              <select
+                className={styles['settings-input']}
+                value={newGmBridgePlatform}
+                onChange={(e) => { setNewGmBridgePlatform(e.target.value); setNewGmBridgeChats([]); }}
+                style={{ width: '100%' }}
+              >
+                <option value="">选择平台...</option>
+                {bridgePlatforms.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              {newGmBridgePlatform && (
+                <select
+                  className={styles['settings-input']}
+                  multiple
+                  value={newGmBridgeChats}
+                  onChange={(e) => setNewGmBridgeChats(Array.from(e.target.selectedOptions, o => o.value))}
+                  style={{ width: '100%', minHeight: '80px' }}
+                >
+                  {bridgeSessions
+                    .filter((s: any) => s.platform === newGmBridgePlatform)
+                    .map((s: any) => (
+                      <option key={s.chatId} value={s.chatId}>{s.displayName || s.chatId}</option>
+                    ))}
+                </select>
+              )}
+            </div>
           }
         />
         <SettingsSection.Footer>

@@ -54,7 +54,7 @@
     "createCancel": "キャンセル",
     "createConfirm": "作成",
     "nameRequired": "チャンネル名を入力してください",
-    "minMembers": "Agent メンバーを2人以上選んでください",
+    "minMembers": "Agent メンバーを1人以上選んでください",
     "created": "チャンネル #{name} を作成しました ✿",
     "createFailed": "作成に失敗しました",
     "alreadyExists": "チャンネルはすでに存在します",

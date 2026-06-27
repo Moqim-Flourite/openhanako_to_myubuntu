@@ -82,7 +82,7 @@ export function ChannelCreateOverlay() {
       nameRef.current?.focus();
       return;
     }
-    if (selectedMembers.length < 2) {
+    if (selectedMembers.length < 1) {
       setMembersError(true);
       setSubmitError(t('channel.minMembers'));
       return;
@@ -107,8 +107,8 @@ export function ChannelCreateOverlay() {
     }
   }, [creating, name, selectedMembers, intro, setVisible, t]);
 
-  const memberHelper = selectedMembers.length < 2 ? t('channel.minMembers') : '';
-  const canSubmit = !!name.trim() && selectedMembers.length >= 2;
+  const memberHelper = selectedMembers.length < 1 ? t('channel.minMembers') : '';
+  const canSubmit = !!name.trim() && selectedMembers.length >= 1;
 
   return (
     <Overlay

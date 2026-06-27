@@ -61,7 +61,7 @@
     "createCancel": "取消",
     "createConfirm": "创建",
     "nameRequired": "请输入频道名称",
-    "minMembers": "至少选择 2 位 Agent 成员",
+    "minMembers": "至少选择 1 位 Agent 成员",
     "created": "频道 #{name} 已创建 ✿",
     "createFailed": "创建失败",
     "alreadyExists": "频道已存在",

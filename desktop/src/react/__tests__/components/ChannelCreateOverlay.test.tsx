@@ -61,9 +61,7 @@ describe('ChannelCreateOverlay', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps create disabled until a name and at least two agent members are selected', async () => {
-    storeState.agents = [{ id: 'alice', name: 'Alice', yuan: '', isPrimary: true }];
-
+  it('keeps create disabled until a name and at least one agent member is selected', async () => {
     render(<ChannelCreateOverlay />);
     fireEvent.change(screen.getByPlaceholderText('channel.createNamePlaceholder'), {
       target: { value: 'solo' },
