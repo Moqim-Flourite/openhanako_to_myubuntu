@@ -947,7 +947,14 @@
       "allChannels": "所有频道",
       "memorySources": "记忆来源",
       "memorySourcesHint": "用逗号分隔，如：ch_xxx, bridge:qq:12345",
-      "memorySourcesPlaceholder": "留空表示全部来源"
+      "memorySourcesPlaceholder": "留空表示全部来源",
+      "sourceType": "来源类型",
+      "sourceTypeChannel": "频道",
+      "sourceTypeAgent": "Agent",
+      "sourceTypeDm": "聊天",
+      "sourceTypeBridge": "社交平台",
+      "sourceId": "选择来源",
+      "selectSource": "请选择..."
     },
     "browser": {
       "cookiesTitle": "Cookies",

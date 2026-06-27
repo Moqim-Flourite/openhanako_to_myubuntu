@@ -18,6 +18,7 @@ export function DevTab() {
   const showToast = useSettingsStore(s => s.showToast);
   const settingsConfig = useSettingsStore(s => s.settingsConfig);
   const channels = useStore(s => s.channels);
+  const agents = useStore(s => s.agents);
   const [customFolders, setCustomFolders] = useState<CustomFolder[]>([]);
   const [newPath, setNewPath] = useState('');
   const [newLabel, setNewLabel] = useState('');
@@ -25,7 +26,10 @@ export function DevTab() {
   const [globalMemoryConfigs, setGlobalMemoryConfigs] = useState<any[]>([]);
   const [newGmName, setNewGmName] = useState('');
   const [newGmChannel, setNewGmChannel] = useState('');
-  const [newGmSources, setNewGmSources] = useState('');
+  const [newGmSourceType, setNewGmSourceType] = useState<'channel' | 'agent' | 'dm' | 'bridge'>('channel');
+  const [newGmSourceId, setNewGmSourceId] = useState('');
+  const [dms, setDms] = useState<any[]>([]);
+  const [bridgeConnections, setBridgeConnections] = useState<any[]>([]);
 
   useEffect(() => {
     const diarySources = (settingsConfig as any)?.diaryDataSources;
@@ -38,6 +42,34 @@ export function DevTab() {
       setGlobalMemoryConfigs(Array.isArray(gmConfigs) ? gmConfigs : []);
     }
   }, [settingsConfig]);
+
+  // Fetch DMs and bridge connections
+  useEffect(() => {
+    const loadDms = async () => {
+      try {
+        const res = await hanaFetch('/api/dm');
+        if (res.ok) {
+          const data = await res.json();
+          setDms(data.dms || []);
+        }
+      } catch (err) {
+        console.error('[dev] Failed to load DMs:', err);
+      }
+    };
+    const loadBridge = async () => {
+      try {
+        const res = await hanaFetch('/api/bridge/status');
+        if (res.ok) {
+          const data = await res.json();
+          setBridgeConnections(data.connections || []);
+        }
+      } catch (err) {
+        console.error('[dev] Failed to load bridge status:', err);
+      }
+    };
+    loadDms();
+    loadBridge();
+  }, []);
 
   const saveFolders = async (next: CustomFolder[]) => {
     setSaving(true);
@@ -128,7 +160,18 @@ export function DevTab() {
       showToast(t('settings.dev.configNameRequired'), 'error');
       return;
     }
-    const sources = newGmSources.split(',').map(s => s.trim()).filter(Boolean);
+    // Build source string based on type
+    let source = '';
+    if (newGmSourceType === 'channel') {
+      source = newGmSourceId ? `ch_${newGmSourceId}` : '';
+    } else if (newGmSourceType === 'agent') {
+      source = newGmSourceId || '';
+    } else if (newGmSourceType === 'dm') {
+      source = newGmSourceId ? `dm:${newGmSourceId}` : '';
+    } else if (newGmSourceType === 'bridge') {
+      source = newGmSourceId || '';
+    }
+    const sources = source ? [source] : [];
     const next = [
       ...globalMemoryConfigs,
       {
@@ -141,7 +184,7 @@ export function DevTab() {
     setGlobalMemoryConfigs(next);
     setNewGmName('');
     setNewGmChannel('');
-    setNewGmSources('');
+    setNewGmSourceId('');
     saveGlobalMemoryConfigs(next);
   };
 
@@ -323,19 +366,49 @@ export function DevTab() {
           }
         />
         <SettingsRow
-          label={t('settings.dev.memorySources')}
-          hint={t('settings.dev.memorySourcesHint')}
+          label={t('settings.dev.sourceType') || '来源类型'}
           layout="stacked"
           control={
-            <input
+            <select
               className={styles['settings-input']}
-              type="text"
-              placeholder={t('settings.dev.memorySourcesPlaceholder')}
-              value={newGmSources}
-              onChange={(e) => setNewGmSources(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') addGlobalMemoryConfig(); }}
+              value={newGmSourceType}
+              onChange={(e) => {
+                setNewGmSourceType(e.target.value as any);
+                setNewGmSourceId('');
+              }}
               style={{ width: '100%' }}
-            />
+            >
+              <option value="channel">{t('settings.dev.sourceTypeChannel') || '频道'}</option>
+              <option value="agent">{t('settings.dev.sourceTypeAgent') || 'Agent'}</option>
+              <option value="dm">{t('settings.dev.sourceTypeDm') || '聊天'}</option>
+              <option value="bridge">{t('settings.dev.sourceTypeBridge') || '社交平台'}</option>
+            </select>
+          }
+        />
+        <SettingsRow
+          label={t('settings.dev.sourceId') || '选择来源'}
+          layout="stacked"
+          control={
+            <select
+              className={styles['settings-input']}
+              value={newGmSourceId}
+              onChange={(e) => setNewGmSourceId(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <option value="">{t('settings.dev.selectSource') || '请选择...'}</option>
+              {newGmSourceType === 'channel' && channels.map(ch => (
+                <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
+              ))}
+              {newGmSourceType === 'agent' && agents.map(a => (
+                <option key={a.id} value={a.id}>{a.name || a.id}</option>
+              ))}
+              {newGmSourceType === 'dm' && dms.map(dm => (
+                <option key={dm.peerId} value={dm.peerId}>{dm.peerName || dm.peerId}</option>
+              ))}
+              {newGmSourceType === 'bridge' && bridgeConnections.map(conn => (
+                <option key={conn.id || conn.platform} value={`${conn.platform}:${conn.chatId || ''}`}>{conn.platform} - {conn.chatId || conn.name || ''}</option>
+              ))}
+            </select>
           }
         />
         <SettingsSection.Footer>
