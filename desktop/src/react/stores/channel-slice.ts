@@ -26,6 +26,7 @@ export interface ChannelSlice {
   channelAgentDispatchMode: AgentPhoneDispatchMode;
   channelGlobalMemory: boolean;
   channelGlobalMemorySources: string[];
+  channelScrollPositions: Record<string, number>;
   setChannels: (channels: Channel[]) => void;
   setCurrentChannel: (channel: string | null) => void;
   setChannelMessages: (messages: ChannelMessage[]) => void;
@@ -61,6 +62,7 @@ export const createChannelSlice = (
   channelAgentDispatchMode: 'parallel',
   channelGlobalMemory: false,
   channelGlobalMemorySources: [],
+  channelScrollPositions: {},
   setChannels: (channels) => set({ channels }),
   setCurrentChannel: (channel) => set({ currentChannel: channel }),
   setChannelMessages: (messages) => set({ channelMessages: messages }),

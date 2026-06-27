@@ -105,8 +105,8 @@ export function ChannelMessages() {
   const previousChannelRef = useRef<string | null>(null);
   const previousLengthRef = useRef(0);
   const [showNewMessages, setShowNewMessages] = useState(false);
-  // 每个频道的滚动位置缓存
-  const scrollPosMapRef = useRef<Map<string, number>>(new Map());
+  // 从 store 读取滚动位置缓存（跨 tab 切换不丢）
+  const scrollPositions = useStore(s => s.channelScrollPositions);
 
   const getScrollContainer = useCallback(() => (
     wrapperRef.current?.closest('.channel-messages') as HTMLElement | null
@@ -143,7 +143,9 @@ export function ChannelMessages() {
     if (oldChannel) {
       const el = getScrollContainer();
       if (el) {
-        scrollPosMapRef.current.set(oldChannel, el.scrollTop);
+        useStore.setState(s => ({
+          channelScrollPositions: { ...s.channelScrollPositions, [oldChannel]: el.scrollTop },
+        }));
       }
     }
     prevChannelForSaveRef.current = currentChannel;
@@ -170,7 +172,7 @@ export function ChannelMessages() {
     if (el && messages.length > 0) {
       if (channelChanged || previousLength === 0) {
         // 尝试恢复保存的滚动位置，没有则滚到底
-        const savedTop = currentChannel ? scrollPosMapRef.current.get(currentChannel) : undefined;
+        const savedTop = currentChannel ? scrollPositions[currentChannel] : undefined;
         if (savedTop !== undefined && channelChanged) {
           setChannelScrollTopInstant(el, savedTop);
           isNearBottomRef.current = (el.scrollHeight - savedTop - el.clientHeight) <= CHANNEL_SCROLL_THRESHOLD;
