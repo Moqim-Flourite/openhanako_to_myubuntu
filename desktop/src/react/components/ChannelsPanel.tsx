@@ -1341,25 +1341,22 @@ export function ChannelInput() {
     const inserted = `@${name} `;
     setInputValue(before + inserted + val.slice(pos));
     setMentionActive(false);
-    requestAnimationFrame(() => {
-      if (!inputRef.current) return;
-      const c = before.length + inserted.length;
-      inputRef.current.setSelectionRange(c, c);
-      inputRef.current.focus();
-    });
+    // 同步 focus，不用 rAF 避免竞态导致焦点丢失
+    const c = before.length + inserted.length;
+    inputRef.current.setSelectionRange(c, c);
+    inputRef.current.focus();
   }, [mentionStartPos]);
 
   useEffect(() => {
     const handleComposerFocus = (event: Event) => {
       const detail = (event as CustomEvent<{ channelId?: string }>).detail;
       if (!currentChannel || detail?.channelId !== currentChannel) return;
-      requestAnimationFrame(() => {
-        const input = inputRef.current;
-        if (!input) return;
-        const pos = input.value.length;
-        input.focus();
-        input.setSelectionRange(pos, pos);
-      });
+      // 同步 focus，不用 rAF 避免和用户点击产生竞态
+      const input = inputRef.current;
+      if (!input) return;
+      const pos = input.value.length;
+      input.focus();
+      input.setSelectionRange(pos, pos);
     };
     window.addEventListener(CHANNEL_COMPOSER_FOCUS_EVENT, handleComposerFocus);
     return () => window.removeEventListener(CHANNEL_COMPOSER_FOCUS_EVENT, handleComposerFocus);
@@ -1378,7 +1375,8 @@ export function ChannelInput() {
     if (e.key === 'Escape') { e.preventDefault(); setMentionActive(false); }
   }, [mentionActive, mentionItems, mentionSelectedIdx, insertMention, handleSend]);
 
-  const adjustHeight = useCallback(() => {
+  // 同步调整输入框高度（微信风格自动扩展）
+  const syncHeight = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
     el.style.height = 'auto';
@@ -1389,22 +1387,13 @@ export function ChannelInput() {
   const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
     checkMention();
-    // 同步调整高度，不用 requestAnimationFrame 避免焦点丢失
-    const el = inputRef.current;
-    if (el) {
-      el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-    }
-  }, [checkMention]);
+    syncHeight();
+  }, [checkMention, syncHeight]);
 
-  // 草稿恢复后调整高度
+  // 草稿恢复 / 切换频道后调整高度
   useEffect(() => {
-    const el = inputRef.current;
-    if (el) {
-      el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-    }
-  }, [currentChannel]);
+    syncHeight();
+  }, [currentChannel, syncHeight]);
 
   if (isDM || !currentChannel) return null;
 
