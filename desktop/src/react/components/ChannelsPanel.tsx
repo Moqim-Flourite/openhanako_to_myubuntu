@@ -1388,16 +1388,23 @@ export function ChannelInput() {
   // 输入时自动调整高度
   const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
-    requestAnimationFrame(() => {
-      checkMention();
-      adjustHeight();
-    });
-  }, [checkMention, adjustHeight]);
+    checkMention();
+    // 同步调整高度，不用 requestAnimationFrame 避免焦点丢失
+    const el = inputRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    }
+  }, [checkMention]);
 
-  // 草稿恢复后也调整高度
+  // 草稿恢复后调整高度
   useEffect(() => {
-    requestAnimationFrame(() => adjustHeight());
-  }, [inputValue, adjustHeight]);
+    const el = inputRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    }
+  }, [currentChannel]);
 
   if (isDM || !currentChannel) return null;
 
