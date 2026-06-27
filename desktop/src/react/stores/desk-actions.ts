@@ -865,7 +865,7 @@ export async function deleteNote(noteId: string): Promise<void> {
     await hanaFetch('/api/desk/files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...selectedDeskAgentBody(s), action: 'delete', dir: s.deskBasePath || undefined, subdir: NOTES_SUBDIR, name: `${noteId}.md` }),
+      body: JSON.stringify({ ...selectedDeskAgentBody(s), action: 'remove', dir: s.deskBasePath || undefined, subdir: NOTES_SUBDIR, name: `${noteId}.md` }),
     });
     // 如果删除的是当前活跃笔记，切换到第一个
     const current = useStore.getState();
