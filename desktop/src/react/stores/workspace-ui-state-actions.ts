@@ -29,6 +29,8 @@ export interface PersistedWorkspaceUiState {
   openTabs?: string[];
   activeTabId?: string | null;
   previewTabs?: PersistedPreviewTab[];
+  noteTabs?: import('./desk-slice').NoteTab[];
+  activeNoteId?: string | null;
 }
 
 const SAVE_DEBOUNCE_MS = 350;
@@ -121,6 +123,8 @@ export function buildPersistedWorkspaceUiState(root: string): PersistedWorkspace
     openTabs,
     activeTabId,
     previewTabs,
+    noteTabs: state.noteTabs || [],
+    activeNoteId: state.activeNoteId || null,
   };
 }
 

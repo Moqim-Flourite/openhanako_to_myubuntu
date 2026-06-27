@@ -1,0 +1,180 @@
+/* ========================================
+   NotesPanel — 多便签面板
+   ======================================== */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ── Tab 栏 ── */
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 0;
+  border-bottom: 1px solid var(--overlay-light);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabBar::-webkit-scrollbar {
+  display: none;
+}
+
+.tabList {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabList::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: default;
+  white-space: nowrap;
+  user-select: none;
+  transition: background var(--duration-fast), color var(--duration-fast);
+  min-width: 0;
+  max-width: 120px;
+}
+
+.tab:hover {
+  background: var(--overlay-light);
+  color: var(--text-light);
+}
+
+.tabActive {
+  background: var(--bg-card);
+  color: var(--text);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tabTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabEditInput {
+  width: 80px;
+  padding: 0 2px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  outline: none;
+}
+
+.addTab {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: default;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.addTab:hover {
+  background: var(--overlay-light);
+  color: var(--text);
+}
+
+/* ── 右键菜单 ── */
+.contextMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 100;
+  min-width: 80px;
+  padding: 2px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--overlay-medium);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px var(--shadow);
+  animation: hana-fade-up var(--duration-instant) var(--ease-out);
+}
+
+.contextMenuItem {
+  display: block;
+  width: 100%;
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: default;
+  transition: background var(--duration-instant);
+}
+
+.contextMenuItem:hover {
+  background: var(--overlay-light);
+}
+
+.contextMenuDanger {
+  color: var(--danger, #b45757);
+}
+
+.contextMenuDanger:hover {
+  background: rgba(180, 87, 87, 0.08);
+}
+
+/* ── 编辑器 ── */
+.editor {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: none;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  overflow-y: auto;
+}
+
+.editor::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── 空状态 ── */
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}

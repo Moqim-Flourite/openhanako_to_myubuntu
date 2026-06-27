@@ -2107,7 +2107,8 @@
     "tabs": {
       "label": "오른쪽 작업공간",
       "sessionFiles": "대화 파일",
-      "workspace": "작업공간"
+      "workspace": "작업공간",
+      "notes": "메모"
     },
     "sessionFiles": {
       "title": "대화 파일",

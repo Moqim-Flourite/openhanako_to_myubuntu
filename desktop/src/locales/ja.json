@@ -2107,7 +2107,8 @@
     "tabs": {
       "label": "右側ワークスペース",
       "sessionFiles": "会話ファイル",
-      "workspace": "ワークスペース"
+      "workspace": "ワークスペース",
+      "notes": "メモ"
     },
     "sessionFiles": {
       "title": "会話ファイル",

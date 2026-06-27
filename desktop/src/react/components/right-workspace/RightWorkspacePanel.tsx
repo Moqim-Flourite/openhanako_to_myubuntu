@@ -10,6 +10,7 @@ import { SessionTodoCard } from './SessionTodoCard';
 import { WorkflowCard } from './WorkflowCard';
 import { AgentActivityCard } from './AgentActivityCard';
 import { SessionStatusCard } from './SessionStatusCard';
+import { NotesPanel } from './NotesPanel';
 import styles from './RightWorkspacePanel.module.css';
 import { workspaceDisplayName } from '../../../../../shared/workspace-history.ts';
 
@@ -21,6 +22,7 @@ interface RightWorkspaceTabDef {
 const BASE_TABS: RightWorkspaceTabDef[] = [
   { id: 'session-files', labelKey: 'rightWorkspace.tabs.sessionFiles' },
   { id: 'workspace', labelKey: 'rightWorkspace.tabs.workspace' },
+  { id: 'notes', labelKey: 'rightWorkspace.tabs.notes' },
 ];
 
 function Chevron({ open }: { open: boolean }) {
@@ -70,6 +72,7 @@ function JianFloatingToggle() {
 
 function TabContent({ activeTab }: { activeTab: RightWorkspaceTab }) {
   if (activeTab === 'session-files') return <SessionRegistryFilesPanel />;
+  if (activeTab === 'notes') return <NotesPanel />;
   return <DeskSection framed={false} showHeader={false} rightWorkspaceLayout />;
 }
 
@@ -117,9 +120,12 @@ export function RightWorkspacePanel({ compact = false }: { compact?: boolean }) 
     ? rightWorkspaceTab
     : 'workspace';
   const activeTabIndex = Math.max(0, BASE_TABS.findIndex(tab => tab.id === activeTab));
+  const tabCount = BASE_TABS.length;
+  const tabWidth = tabCount > 0 ? `${100 / tabCount}%` : '50%';
   const tabsStyle = {
     '--right-workspace-active-tab-index': `${activeTabIndex}`,
-    '--right-workspace-tab-slider-offset': activeTabIndex === 0 ? '0px' : 'calc(100% + 2px)',
+    '--right-workspace-tab-slider-offset': activeTabIndex === 0 ? '0px' : `calc(${tabWidth} * ${activeTabIndex} + ${activeTabIndex}px)`,
+    '--right-workspace-tab-width': tabWidth,
   } as CSSProperties;
 
   return (

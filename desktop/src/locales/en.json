@@ -2319,7 +2319,8 @@
     "tabs": {
       "label": "Right workspace",
       "sessionFiles": "Conversation Files",
-      "workspace": "Workspace"
+      "workspace": "Workspace",
+      "notes": "Notes"
     },
     "sessionFiles": {
       "title": "Conversation Files",

@@ -10,6 +10,12 @@ export interface CwdSkillInfo {
   workspaceMountId?: string | null;
 }
 
+export interface NoteTab {
+  id: string;
+  title: string;
+  fileName: string;
+}
+
 export interface WorkspaceDeskState {
   deskCurrentPath: string;
   deskFiles: DeskFile[];
@@ -25,6 +31,8 @@ export interface WorkspaceDeskState {
   previewOpen: boolean;
   openTabs: string[];
   activeTabId: string | null;
+  noteTabs: NoteTab[];
+  activeNoteId: string | null;
 }
 
 export interface DeskSlice {
@@ -54,6 +62,12 @@ export interface DeskSlice {
   workspaceFolders: string[];
   cwdHistory: string[];
   workspaceDeskStateByRoot: Record<string, WorkspaceDeskState>;
+  noteTabs: NoteTab[];
+  activeNoteId: string | null;
+  noteContent: string | null;
+  setNoteTabs: (tabs: NoteTab[]) => void;
+  setActiveNoteId: (id: string | null) => void;
+  setNoteContent: (content: string | null) => void;
   setCwdSkills: (skills: CwdSkillInfo[]) => void;
   setCwdSkillsOpen: (open: boolean) => void;
   toggleCwdSkillsOpen: () => void;
@@ -101,6 +115,12 @@ export const createDeskSlice = (
   workspaceFolders: [],
   cwdHistory: [],
   workspaceDeskStateByRoot: {},
+  noteTabs: [],
+  activeNoteId: null,
+  noteContent: null,
+  setNoteTabs: (tabs) => set({ noteTabs: tabs }),
+  setActiveNoteId: (id) => set({ activeNoteId: id }),
+  setNoteContent: (content) => set({ noteContent: content }),
   setCwdSkills: (skills) => set({ cwdSkills: skills }),
   setCwdSkillsOpen: (open) => set({ cwdSkillsOpen: open }),
   toggleCwdSkillsOpen: () => set((s) => ({ cwdSkillsOpen: !s.cwdSkillsOpen })),

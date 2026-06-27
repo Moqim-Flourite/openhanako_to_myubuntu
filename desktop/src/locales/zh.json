@@ -2358,7 +2358,8 @@
     "tabs": {
       "label": "右侧工作台",
       "sessionFiles": "对话文件",
-      "workspace": "工作台"
+      "workspace": "工作台",
+      "notes": "便签"
     },
     "sessionFiles": {
       "title": "对话文件",

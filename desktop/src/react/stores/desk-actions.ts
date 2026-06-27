@@ -224,6 +224,8 @@ function buildWorkspaceDeskState(s: ReturnType<typeof useStore.getState>): Works
     previewOpen: !!s.previewOpen,
     openTabs,
     activeTabId,
+    noteTabs: s.noteTabs || [],
+    activeNoteId: s.activeNoteId || null,
   };
 }
 
@@ -334,6 +336,8 @@ export async function activateWorkspaceDesk(root: string | null | undefined, opt
         previewOpen: !!persisted.previewOpen,
         openTabs: restoredOpenTabs,
         activeTabId: restoredActiveTabId,
+        noteTabs: persisted.noteTabs || [],
+        activeNoteId: persisted.activeNoteId || null,
         ...(restoredPreviewItems.length > 0
           ? {
               previewItems: [
@@ -709,6 +713,189 @@ export async function saveJianContent(content?: string): Promise<void> {
     st.setDeskTreeFiles('', data2.files || []);
   } catch (err) {
     console.error('[jian] save jian.md failed:', err);
+  }
+}
+
+// ── Notes (便签) actions ──
+
+const NOTES_SUBDIR = 'notes';
+
+/** 从 desk 文件列表中提取 notes/ 子目录下的 .md 文件，构建 NoteTab 列表 */
+function extractNoteTabs(files: any[]): import('./desk-slice').NoteTab[] {
+  if (!Array.isArray(files)) return [];
+  return files
+    .filter((f: any) => {
+      if (!f.name || typeof f.name !== 'string') return false;
+      // 只要 notes/ 下的 .md 文件
+      return f.name.startsWith(NOTES_SUBDIR + '/') && f.name.endsWith('.md');
+    })
+    .map((f: any) => {
+      const fileName = f.name; // e.g. 'notes/abc123.md'
+      const baseName = fileName.replace(NOTES_SUBDIR + '/', '').replace('.md', '');
+      return { id: baseName, title: baseName, fileName };
+    });
+}
+
+/** 加载便签列表（从 desk 目录的 notes/ 子目录扫描） */
+export async function loadNotes(): Promise<void> {
+  const s = useStore.getState();
+  if (!hasServerConnection(s)) return;
+  try {
+    const mountId = activeDeskMountId(s);
+    const params = new URLSearchParams();
+    if (mountId) {
+      params.set('mountId', mountId);
+    } else if (s.deskBasePath) {
+      params.set('dir', s.deskBasePath);
+      addSelectedDeskAgentParam(params, s);
+    } else {
+      addSelectedDeskAgentParam(params, s);
+    }
+    const qs = params.toString() ? `?${params}` : '';
+    const res = await hanaFetch(`${mountId ? '/api/workbench/files' : '/api/desk/files'}${qs}`);
+    const data = await res.json();
+    const noteTabs = extractNoteTabs(data.files || []);
+    useStore.getState().setNoteTabs(noteTabs);
+    // 如果当前没有活跃笔记，选第一个
+    const current = useStore.getState();
+    if (!current.activeNoteId && noteTabs.length > 0) {
+      useStore.getState().setActiveNoteId(noteTabs[0].id);
+    }
+  } catch (err) {
+    console.error('[notes] load notes failed:', err);
+  }
+}
+
+/** 加载指定便签的内容 */
+export async function loadNoteContent(noteId: string): Promise<void> {
+  const s = useStore.getState();
+  if (!hasServerConnection(s)) return;
+  try {
+    const mountId = activeDeskMountId(s);
+    const fileName = `${NOTES_SUBDIR}/${noteId}.md`;
+    const params = new URLSearchParams();
+    if (mountId) {
+      params.set('mountId', mountId);
+      params.set('name', fileName);
+    } else {
+      if (s.deskBasePath) params.set('dir', s.deskBasePath);
+      params.set('subdir', NOTES_SUBDIR);
+      addSelectedDeskAgentParam(params, s);
+    }
+    const qs = params.toString() ? `?${params}` : '';
+    const url = mountId ? `/api/workbench/content${qs}` : `/api/desk/jian${qs}`;
+    const res = await hanaFetch(url);
+    if (mountId) {
+      if (res.status === 404) { useStore.getState().setNoteContent(null); return; }
+      if (!res.ok) throw new Error(`note load failed: ${res.status}`);
+      useStore.getState().setNoteContent(await res.text() || null);
+    } else {
+      const data = await res.json();
+      useStore.getState().setNoteContent(data.content || null);
+    }
+  } catch (err) {
+    console.error('[notes] load note content failed:', err);
+    useStore.getState().setNoteContent(null);
+  }
+}
+
+/** 保存便签内容 */
+export async function saveNoteContent(noteId: string, content: string): Promise<void> {
+  const s = useStore.getState();
+  if (!hasServerConnection(s)) return;
+  try {
+    const mountId = activeDeskMountId(s);
+    const fileName = `${NOTES_SUBDIR}/${noteId}.md`;
+    if (mountId) {
+      await hanaFetch('/api/workbench/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'writeText', mountId, subdir: NOTES_SUBDIR, name: `${noteId}.md`, content }),
+      });
+    } else {
+      await hanaFetch('/api/desk/jian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...selectedDeskAgentBody(s), dir: s.deskBasePath || undefined, subdir: NOTES_SUBDIR, content }),
+      });
+    }
+    useStore.getState().setNoteContent(content);
+  } catch (err) {
+    console.error('[notes] save note content failed:', err);
+  }
+}
+
+/** 创建新便签 */
+export async function createNote(title?: string): Promise<string | null> {
+  const s = useStore.getState();
+  if (!hasServerConnection(s)) return null;
+  const id = title || `note-${Date.now().toString(36)}`;
+  const fileName = `${NOTES_SUBDIR}/${id}.md`;
+  try {
+    const mountId = activeDeskMountId(s);
+    if (mountId) {
+      await hanaFetch('/api/workbench/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'writeText', mountId, subdir: NOTES_SUBDIR, name: `${id}.md`, content: '' }),
+      });
+    } else {
+      await hanaFetch('/api/desk/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...selectedDeskAgentBody(s), action: 'create', dir: s.deskBasePath || undefined, subdir: NOTES_SUBDIR, name: `${id}.md`, content: '' }),
+      });
+    }
+    // 重新加载笔记列表
+    await loadNotes();
+    useStore.getState().setActiveNoteId(id);
+    useStore.getState().setNoteContent('');
+    return id;
+  } catch (err) {
+    console.error('[notes] create note failed:', err);
+    return null;
+  }
+}
+
+/** 删除便签 */
+export async function deleteNote(noteId: string): Promise<void> {
+  const s = useStore.getState();
+  if (!hasServerConnection(s)) return;
+  try {
+    await hanaFetch('/api/desk/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...selectedDeskAgentBody(s), action: 'delete', dir: s.deskBasePath || undefined, subdir: NOTES_SUBDIR, name: `${noteId}.md` }),
+    });
+    // 如果删除的是当前活跃笔记，切换到第一个
+    const current = useStore.getState();
+    if (current.activeNoteId === noteId) {
+      const remaining = current.noteTabs.filter(t => t.id !== noteId);
+      useStore.getState().setActiveNoteId(remaining[0]?.id || null);
+      useStore.getState().setNoteContent(null);
+    }
+    await loadNotes();
+  } catch (err) {
+    console.error('[notes] delete note failed:', err);
+  }
+}
+
+/** 重命名便签 */
+export async function renameNote(oldId: string, newId: string): Promise<void> {
+  const s = useStore.getState();
+  if (!hasServerConnection(s)) return;
+  try {
+    await hanaFetch('/api/desk/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...selectedDeskAgentBody(s), action: 'rename', dir: s.deskBasePath || undefined, subdir: NOTES_SUBDIR, oldName: `${oldId}.md`, newName: `${newId}.md` }),
+    });
+    if (s.activeNoteId === oldId) {
+      useStore.getState().setActiveNoteId(newId);
+    }
+    await loadNotes();
+  } catch (err) {
+    console.error('[notes] rename note failed:', err);
   }
 }
 
