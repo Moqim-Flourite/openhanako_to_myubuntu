@@ -23,6 +23,8 @@ import { useContinuousBottomScroll } from '../hooks/use-continuous-bottom-scroll
 import { resolveChannelMember, buildAgentMap, formatChannelTime, MemberAvatar } from './channels/ChannelList';
 import type { MemberInfo } from './channels/ChannelList';
 import { ChatTranscript } from './chat/ChatTranscript';
+import { formatQuotedSelectionForPrompt } from '../utils/quoted-selection';
+import { QuotedSelectionCard } from './input/QuotedSelectionCard';
 import { ContextMenu, type ContextMenuItem } from '../ui';
 import type { ChatListItem, ChatMessage, ContentBlock } from '../stores/chat-types';
 import type { AgentPhoneActivity, Channel, ChannelTickerStatus, Model } from '../types';
@@ -1268,6 +1270,7 @@ export function ChannelInput() {
   const currentAgentId = useStore(s => s.currentAgentId);
   const setDraft = useStore(s => s.setDraft);
   const drafts = useStore(s => s.drafts);
+  const quotedSelections = useStore(s => s.quotedSelections);
 
   const agentMap = useMemo(() => buildAgentMap(agents), [agents]);
   const [inputValue, setInputValue] = useState('');
@@ -1303,19 +1306,27 @@ export function ChannelInput() {
   }, [inputValue, currentChannel]);
 
   const handleSend = useCallback(async () => {
-    if (sending || !inputValue.trim()) return;
+    if (sending || (!inputValue.trim() && quotedSelections.length === 0)) return;
     setSending(true);
     try {
-      await sendChannelMessage(inputValue.trim());
+      let text = inputValue.trim();
+      // 附带引用片段
+      const quotes = useStore.getState().quotedSelections;
+      if (quotes.length > 0) {
+        const quoteStr = quotes.map(formatQuotedSelectionForPrompt).join('\n\n');
+        text = text ? `${text}\n\n${quoteStr}` : quoteStr;
+      }
+      await sendChannelMessage(text);
       setInputValue('');
-      // 发送成功后清除草稿
+      // 发送成功后清除草稿和引用
       if (currentChannel) {
         const draftKey = `channel:${currentChannel}`;
         useStore.getState().clearDraft(draftKey);
       }
+      if (useStore.getState().quotedSelections.length > 0) useStore.getState().clearQuotedSelections();
     }
     finally { setSending(false); }
-  }, [sending, inputValue, currentChannel]);
+  }, [sending, inputValue, currentChannel, quotedSelections]);
 
   const checkMention = useCallback(() => {
     if (!inputRef.current) return;
@@ -1404,6 +1415,7 @@ export function ChannelInput() {
 
   return (
     <div className={styles.channelInputWrapper}>
+      {quotedSelections.length > 0 && <QuotedSelectionCard />}
       {mentionActive && mentionItems.length > 0 && (
         <div className={styles.channelMentionDropdown}>
           {mentionItems.map((m) => (
@@ -1436,7 +1448,7 @@ export function ChannelInput() {
       />
       <button
         className={styles.channelSendBtn}
-        disabled={!inputValue.trim() || sending}
+        disabled={(!inputValue.trim() && quotedSelections.length === 0) || sending}
         onClick={handleSend}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
