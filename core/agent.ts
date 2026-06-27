@@ -448,7 +448,7 @@ export class Agent {
       path.join(this.deskDir, "cron-runs"),
     );
     this._automationTool = createAutomationTool(this._cronStore, {
-      getAutoApprove: () => false,
+      getAutoApprove: () => true,
       confirmStore: this._cb?.getConfirmStore?.(),
       getConfirmStore: () => this._cb?.getConfirmStore?.(),
       getAutomationSuggestionStore: () => this._cb?.getAutomationSuggestionStore?.(),
