@@ -126,6 +126,7 @@ function normalizePhoneSettingsPayload(body: any = {}) {
     modelOverrideModel: override.model,
     dispatchMode: normalizeDispatchMode(body.dispatchMode),
     globalMemory: body.globalMemory === undefined ? undefined : readBoolean(body.globalMemory),
+    globalMemorySources: body.globalMemorySources === undefined ? undefined : body.globalMemorySources,
   };
 }
 
@@ -152,6 +153,7 @@ function readChannelPhoneSettingsFromMeta(meta: any) {
     modelOverrideModel: override.model,
     dispatchMode: normalizeDispatchMode(meta.agentPhoneDispatchMode),
     globalMemory: meta.globalMemory === undefined ? false : readBoolean(meta.globalMemory),
+    globalMemorySources: meta.globalMemorySources ? (() => { try { return JSON.parse(meta.globalMemorySources); } catch { return []; } })() : [],
   };
 }
 
@@ -318,6 +320,8 @@ export function createChannelsRoute(engine: any, hub: any) {
       agentPhoneModelOverrideId: settings.modelOverrideEnabled && settings.modelOverrideModel ? settings.modelOverrideModel.id : "",
       agentPhoneModelOverrideProvider: settings.modelOverrideEnabled && settings.modelOverrideModel ? settings.modelOverrideModel.provider : "",
       agentPhoneDispatchMode: settings.dispatchMode || 'parallel',
+      globalMemory: settings.globalMemory ? 'true' : 'false',
+    globalMemorySources: settings.globalMemorySources ? JSON.stringify(settings.globalMemorySources) : '',
     });
     if (hub?.refreshChannelProactiveSchedule) {
       hub.refreshChannelProactiveSchedule();

@@ -25,6 +25,7 @@ export interface ChannelSlice {
   channelAgentModelOverrideModel: { id: string; provider: string } | null;
   channelAgentDispatchMode: AgentPhoneDispatchMode;
   channelGlobalMemory: boolean;
+  channelGlobalMemorySources: string[];
   setChannels: (channels: Channel[]) => void;
   setCurrentChannel: (channel: string | null) => void;
   setChannelMessages: (messages: ChannelMessage[]) => void;
@@ -59,6 +60,7 @@ export const createChannelSlice = (
   channelAgentModelOverrideModel: null,
   channelAgentDispatchMode: 'parallel',
   channelGlobalMemory: false,
+  channelGlobalMemorySources: [],
   setChannels: (channels) => set({ channels }),
   setCurrentChannel: (channel) => set({ currentChannel: channel }),
   setChannelMessages: (messages) => set({ channelMessages: messages }),

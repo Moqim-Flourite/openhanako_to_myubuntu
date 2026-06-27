@@ -89,11 +89,30 @@ export function DevTab() {
   const saveGlobalMemoryConfigs = async (next: any[]) => {
     setSaving(true);
     try {
+      // Save to settingsConfig for UI display
       const saved = await autoSaveConfig(
         { globalMemoryConfigs: next },
         { silent: true },
       );
       if (!saved) throw new Error('save returned false');
+
+      // Also update each channel's frontmatter
+      for (const config of next) {
+        if (config.channel) {
+          try {
+            // Switch to the channel first
+            useStore.setState({ currentChannel: config.channel });
+            // Save globalMemory settings to channel frontmatter
+            await saveConversationAgentPhoneSettings({
+              globalMemory: config.enabled,
+              globalMemorySources: config.sources || [],
+            });
+          } catch (err) {
+            console.error(`[dev] Failed to update channel ${config.channel}:`, err);
+          }
+        }
+      }
+
       showToast(t('settings.saved'), 'success');
     } catch (err: any) {
       showToast(t('settings.saveFailed') + ': ' + err.message, 'error');

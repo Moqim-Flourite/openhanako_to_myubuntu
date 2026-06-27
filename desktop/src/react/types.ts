@@ -193,6 +193,7 @@ export interface AgentPhoneSettings {
   modelOverrideModel: { id: string; provider: string } | null;
   dispatchMode: AgentPhoneDispatchMode;
   globalMemory: boolean;
+  globalMemorySources: string[];
 }
 
 export interface Activity {
