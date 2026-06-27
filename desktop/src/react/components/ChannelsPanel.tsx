@@ -753,6 +753,7 @@ export function ChannelAgentSettingsPanel() {
   const guardLimit = useStore(s => s.channelAgentGuardLimit);
   const modelOverrideEnabled = useStore(s => s.channelAgentModelOverrideEnabled);
   const modelOverrideModel = useStore(s => s.channelAgentModelOverrideModel);
+  const dispatchMode = useStore(s => s.channelAgentDispatchMode);
   const [saving, setSaving] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [draftMin, setDraftMin] = useState(replyMinChars ? String(replyMinChars) : '');
@@ -844,6 +845,11 @@ export function ChannelAgentSettingsPanel() {
       modelOverrideEnabled: true,
       modelOverrideModel: { id: selected.id, provider: selected.provider },
     });
+  };
+
+  const changeDispatchMode = (mode: 'parallel' | 'sequential') => {
+    if (mode === dispatchMode || saving) return;
+    void saveSettings({ dispatchMode: mode });
   };
 
   const selectOverrideModel = (model: Model) => {
@@ -944,6 +950,31 @@ export function ChannelAgentSettingsPanel() {
                 onBlur={commitTextSettings}
                 disabled={saving || !proactiveEnabled}
               />
+            </div>
+          </div>
+        )}
+        {!isDM && (
+          <div className={`${styles.agentSettingsInlineGrid} ${styles.agentSettingsInlineGridSpaced}`}>
+            <div className={styles.agentSettingsField}>
+              <div className={styles.agentSettingsLabel}>{t('channel.dispatchMode') || '执行模式'}</div>
+              <div className={`${styles.agentToolModeToggle} ${styles.agentToolModeToggleFill}`}>
+                <button
+                  type="button"
+                  className={`${styles.agentToolModeButton}${dispatchMode === 'parallel' ? ` ${styles.agentToolModeButtonActive}` : ''}`}
+                  disabled={saving}
+                  onClick={() => changeDispatchMode('parallel')}
+                >
+                  {t('channel.dispatchParallel') || '共同执行'}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.agentToolModeButton}${dispatchMode === 'sequential' ? ` ${styles.agentToolModeButtonActive}` : ''}`}
+                  disabled={saving}
+                  onClick={() => changeDispatchMode('sequential')}
+                >
+                  {t('channel.dispatchSequential') || '依次执行'}
+                </button>
+              </div>
             </div>
           </div>
         )}
