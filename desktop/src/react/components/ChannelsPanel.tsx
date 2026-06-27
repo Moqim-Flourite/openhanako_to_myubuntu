@@ -105,6 +105,8 @@ export function ChannelMessages() {
   const previousChannelRef = useRef<string | null>(null);
   const previousLengthRef = useRef(0);
   const [showNewMessages, setShowNewMessages] = useState(false);
+  // 持续追踪当前 scrollTop，避免在 DOM 已更新后读到错误值
+  const scrollTopRef = useRef(0);
   // 从 store 读取滚动位置缓存（跨 tab 切换不丢）
   const scrollPositions = useStore(s => s.channelScrollPositions);
 
@@ -141,13 +143,12 @@ export function ChannelMessages() {
     // 保存旧频道的滚动位置
     const oldChannel = prevChannelForSaveRef.current;
     if (oldChannel) {
-      const el = getScrollContainer();
-      if (el) {
-        useStore.setState(s => ({
-          channelScrollPositions: { ...s.channelScrollPositions, [oldChannel]: el.scrollTop },
-        }));
-      }
+      // 从 ref 读取上一次记录的 scrollTop，而非从已更新的 DOM 读取
+      useStore.setState(s => ({
+        channelScrollPositions: { ...s.channelScrollPositions, [oldChannel]: scrollTopRef.current },
+      }));
     }
+    scrollTopRef.current = 0;
     prevChannelForSaveRef.current = currentChannel;
     isNearBottomRef.current = true;
     previousChannelRef.current = null;
@@ -159,8 +160,9 @@ export function ChannelMessages() {
     const el = getScrollContainer();
     if (!el) return;
     const onScroll = () => { checkNearBottom(); };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
+    const onScrollTracked = () => { scrollTopRef.current = el.scrollTop; checkNearBottom(); };
+    el.addEventListener('scroll', onScrollTracked, { passive: true });
+    return () => el.removeEventListener('scroll', onScrollTracked);
   }, [checkNearBottom, getScrollContainer, messages.length]);
 
   useLayoutEffect(() => {
