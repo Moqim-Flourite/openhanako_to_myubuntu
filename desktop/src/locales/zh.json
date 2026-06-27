@@ -954,7 +954,12 @@
       "sourceTypeDm": "聊天",
       "sourceTypeBridge": "社交平台",
       "sourceId": "选择来源",
-      "selectSource": "请选择..."
+      "selectSource": "请选择...",
+      "selectChannels": "选择频道",
+      "selectAgents": "选择 Agent",
+      "selectDms": "选择聊天",
+      "selectBridges": "选择社交平台聊天",
+      "multiSelectHint": "可多选，按住 Ctrl/Cmd 点击"
     },
     "browser": {
       "cookiesTitle": "Cookies",

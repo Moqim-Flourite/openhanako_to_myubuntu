@@ -26,8 +26,10 @@ export function DevTab() {
   const [globalMemoryConfigs, setGlobalMemoryConfigs] = useState<any[]>([]);
   const [newGmName, setNewGmName] = useState('');
   const [newGmChannel, setNewGmChannel] = useState('');
-  const [newGmSourceType, setNewGmSourceType] = useState<'channel' | 'agent' | 'dm' | 'bridge'>('channel');
-  const [newGmSourceId, setNewGmSourceId] = useState('');
+  const [newGmChannels, setNewGmChannels] = useState<string[]>([]);
+  const [newGmAgents, setNewGmAgents] = useState<string[]>([]);
+  const [newGmDms, setNewGmDms] = useState<string[]>([]);
+  const [newGmBridges, setNewGmBridges] = useState<string[]>([]);
   const [dms, setDms] = useState<any[]>([]);
   const [bridgeConnections, setBridgeConnections] = useState<any[]>([]);
 
@@ -160,31 +162,27 @@ export function DevTab() {
       showToast(t('settings.dev.configNameRequired'), 'error');
       return;
     }
-    // Build source string based on type
-    let source = '';
-    if (newGmSourceType === 'channel') {
-      source = newGmSourceId ? `ch_${newGmSourceId}` : '';
-    } else if (newGmSourceType === 'agent') {
-      source = newGmSourceId || '';
-    } else if (newGmSourceType === 'dm') {
-      source = newGmSourceId ? `dm:${newGmSourceId}` : '';
-    } else if (newGmSourceType === 'bridge') {
-      source = newGmSourceId || '';
-    }
-    const sources = source ? [source] : [];
+    // Build sources from all four multi-select values
+    const sources: string[] = [];
+    newGmChannels.forEach(ch => sources.push(`ch_${ch}`));
+    newGmAgents.forEach(a => sources.push(a));
+    newGmDms.forEach(dm => sources.push(`dm:${dm}`));
+    newGmBridges.forEach(b => sources.push(b));
     const next = [
       ...globalMemoryConfigs,
       {
         name: newGmName.trim(),
-        channel: newGmChannel.trim() || undefined,
+        channel: newGmChannels.length === 1 ? newGmChannels[0] : undefined,
         sources: sources.length > 0 ? sources : undefined,
         enabled: true,
       },
     ];
     setGlobalMemoryConfigs(next);
     setNewGmName('');
-    setNewGmChannel('');
-    setNewGmSourceId('');
+    setNewGmChannels([]);
+    setNewGmAgents([]);
+    setNewGmDms([]);
+    setNewGmBridges([]);
     saveGlobalMemoryConfigs(next);
   };
 
@@ -366,46 +364,72 @@ export function DevTab() {
           }
         />
         <SettingsRow
-          label={t('settings.dev.sourceType') || '来源类型'}
+          label={t('settings.dev.selectChannels') || '选择频道'}
+          hint={t('settings.dev.multiSelectHint') || '可多选'}
           layout="stacked"
           control={
             <select
               className={styles['settings-input']}
-              value={newGmSourceType}
-              onChange={(e) => {
-                setNewGmSourceType(e.target.value as any);
-                setNewGmSourceId('');
-              }}
-              style={{ width: '100%' }}
+              multiple
+              value={newGmChannels}
+              onChange={(e) => setNewGmChannels(Array.from(e.target.selectedOptions, o => o.value))}
+              style={{ width: '100%', minHeight: '80px' }}
             >
-              <option value="channel">{t('settings.dev.sourceTypeChannel') || '频道'}</option>
-              <option value="agent">{t('settings.dev.sourceTypeAgent') || 'Agent'}</option>
-              <option value="dm">{t('settings.dev.sourceTypeDm') || '聊天'}</option>
-              <option value="bridge">{t('settings.dev.sourceTypeBridge') || '社交平台'}</option>
+              {channels.map(ch => (
+                <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
+              ))}
             </select>
           }
         />
         <SettingsRow
-          label={t('settings.dev.sourceId') || '选择来源'}
+          label={t('settings.dev.selectAgents') || '选择 Agent'}
+          hint={t('settings.dev.multiSelectHint') || '可多选'}
           layout="stacked"
           control={
             <select
               className={styles['settings-input']}
-              value={newGmSourceId}
-              onChange={(e) => setNewGmSourceId(e.target.value)}
-              style={{ width: '100%' }}
+              multiple
+              value={newGmAgents}
+              onChange={(e) => setNewGmAgents(Array.from(e.target.selectedOptions, o => o.value))}
+              style={{ width: '100%', minHeight: '80px' }}
             >
-              <option value="">{t('settings.dev.selectSource') || '请选择...'}</option>
-              {newGmSourceType === 'channel' && channels.map(ch => (
-                <option key={ch.id} value={ch.id}>{ch.name || ch.id}</option>
-              ))}
-              {newGmSourceType === 'agent' && agents.map(a => (
+              {agents.map(a => (
                 <option key={a.id} value={a.id}>{a.name || a.id}</option>
               ))}
-              {newGmSourceType === 'dm' && dms.map(dm => (
+            </select>
+          }
+        />
+        <SettingsRow
+          label={t('settings.dev.selectDms') || '选择聊天'}
+          hint={t('settings.dev.multiSelectHint') || '可多选'}
+          layout="stacked"
+          control={
+            <select
+              className={styles['settings-input']}
+              multiple
+              value={newGmDms}
+              onChange={(e) => setNewGmDms(Array.from(e.target.selectedOptions, o => o.value))}
+              style={{ width: '100%', minHeight: '80px' }}
+            >
+              {dms.map(dm => (
                 <option key={dm.peerId} value={dm.peerId}>{dm.peerName || dm.peerId}</option>
               ))}
-              {newGmSourceType === 'bridge' && bridgeConnections.map(conn => (
+            </select>
+          }
+        />
+        <SettingsRow
+          label={t('settings.dev.selectBridges') || '选择社交平台聊天'}
+          hint={t('settings.dev.multiSelectHint') || '可多选'}
+          layout="stacked"
+          control={
+            <select
+              className={styles['settings-input']}
+              multiple
+              value={newGmBridges}
+              onChange={(e) => setNewGmBridges(Array.from(e.target.selectedOptions, o => o.value))}
+              style={{ width: '100%', minHeight: '80px' }}
+            >
+              {bridgeConnections.map(conn => (
                 <option key={conn.id || conn.platform} value={`${conn.platform}:${conn.chatId || ''}`}>{conn.platform} - {conn.chatId || conn.name || ''}</option>
               ))}
             </select>
