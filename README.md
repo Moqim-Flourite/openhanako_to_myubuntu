@@ -13,7 +13,7 @@
 
 ### 目标环境
 - **系统**: Ubuntu 24.04.4 LTS
-- **内核**: Linux 6.17.0-14-generic
+- **内核**: Linux 6.17.0-35-generic
 - **桌面**: GNOME 46 + X11
 - **硬件**: ASUS Vivobook M3401QA, AMD Ryzen 7 5800H, 16GB RAM
 
